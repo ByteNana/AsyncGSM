@@ -1,0 +1,22 @@
+{
+  "name": "AsyncATHandler",
+  "version": "0.1.0",
+  "description": "A library for handling AT commands asynchronously with an ESP32.",
+  "keywords": ["arduino", "esp32", "at commands", "asynchronous"],
+  "authors": [
+    {
+      "name": "Nathan Almeida",
+      "email": "nathan@bytenana.tech"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "export": {
+    "include": [
+      "src/*"
+    ]
+  },
+  "dependencies": {
+    "Bytenana/AsyncATHandler": "https://github.com/ByteNana/AsyncATHandler.git"
+  }
+}
