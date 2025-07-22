@@ -1,14 +1,12 @@
-#include <Arduino.h>
-#include <unity.h>
-#include "AsyncGSM.h"
 #include "mocks.h"
+#include <Arduino.h>
+#include <AsyncGSM.h>
+#include <unity.h>
 
 AsyncGSM modem;
 HardwareMockStream mockSerial;
 
-void setUp(void) {
-  mockSerial.clearSentData();
-}
+void setUp(void) { mockSerial.clearSentData(); }
 
 void tearDown(void) {}
 
@@ -23,21 +21,21 @@ void test_gprs_disconnect() {
   mockSerial.mockResponse("AT+QIDEACT=1\r\nOK\r\n");
   bool ok = modem.gprsDisconnect();
   TEST_ASSERT_TRUE(ok);
-  TEST_ASSERT_EQUAL_STRING("AT+QIDEACT=1\r\n", mockSerial.getSentData().c_str());
+  TEST_ASSERT_EQUAL_STRING("AT+QIDEACT=1\r\n",
+                           mockSerial.getSentData().c_str());
 }
 
 void test_gprs_connect() {
   mockSerial.mockResponse(
-    "AT+QIDEACT=1\r\nOK\r\n"
-    "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\nOK\r\n"
-    "AT+QIACT=1\r\nOK\r\n"
-    "AT+CGATT=1\r\nOK\r\n");
+      "AT+QIDEACT=1\r\nOK\r\n"
+      "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\nOK\r\n"
+      "AT+QIACT=1\r\nOK\r\n"
+      "AT+CGATT=1\r\nOK\r\n");
   bool ok = modem.gprsConnect("internet", "user", "pass");
-  String expected =
-    "AT+QIDEACT=1\r\n"
-    "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\n"
-    "AT+QIACT=1\r\n"
-    "AT+CGATT=1\r\n";
+  String expected = "AT+QIDEACT=1\r\n"
+                    "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\n"
+                    "AT+QIACT=1\r\n"
+                    "AT+CGATT=1\r\n";
   TEST_ASSERT_EQUAL_STRING(expected.c_str(), mockSerial.getSentData().c_str());
   TEST_ASSERT_TRUE(ok);
 }
@@ -53,6 +51,4 @@ void setup() {
   UNITY_END();
 }
 
-void loop() {
-}
-
+void loop() {}

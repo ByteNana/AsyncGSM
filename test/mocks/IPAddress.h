@@ -1,5 +1,6 @@
 #pragma once
 
+#include <WString.h>
 #include <cstdint>
 
 class IPAddress {
@@ -14,8 +15,22 @@ public:
     _address[3] = addr & 0xFF;
   }
 
-  uint8_t *raw_address() { return _address; }
+  uint8_t operator[](int index) const { return _address[index]; }
+
+  String toString() const {
+    String s;
+    s.reserve(16);
+    s += _address[0];
+    s += ".";
+    s += _address[1];
+    s += ".";
+    s += _address[2];
+    s += ".";
+    s += _address[3];
+    return s;
+  }
 
 private:
+  uint8_t *raw_address() { return _address; }
   uint8_t _address[4];
 };
