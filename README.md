@@ -33,5 +33,5 @@ PlatformIO is installed and an ESP32 board is connected. Then run:
 make esp32-test
 ```
 
-This command flashes the hardware test suite onto the device and runs it using
-PlatformIO.
+This command flashes the hardware test suites for both examples onto the
+device and runs them using PlatformIO.

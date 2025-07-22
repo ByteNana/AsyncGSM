@@ -1,6 +1,7 @@
-#include "AsyncGSM.h"
 #include <Arduino.h>
 #include <HttpClient.h>
+
+#include "AsyncGSM.h"
 
 AsyncGSM modem;
 HardwareSerial SerialAT(1);

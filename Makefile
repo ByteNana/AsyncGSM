@@ -36,6 +36,7 @@ esp32:
 esp32-test:
 	@echo "🚀 Flashing hardware test"
 	pio test -d examples/gsm
+	pio test -d examples/http_client
 
 clean:
 	@echo "🧹 Cleaning up..."
