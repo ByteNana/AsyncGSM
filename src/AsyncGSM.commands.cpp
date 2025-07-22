@@ -2,8 +2,7 @@
 
 bool AsyncGSM::gprsDisconnect() {
   // Deactivate the GPRS context
-  String response;
-  bool ok = at.sendCommand("AT+QIDEACT=1", response, "OK", 4000);
+  bool ok = at.sendCommand("AT+QIDEACT=1", "OK");
   return ok;
 }
 
@@ -16,11 +15,11 @@ bool AsyncGSM::gprsConnect(const char *apn, const char *user, const char *pwd) {
     return false;
   }
 
-  if (!at.sendCommand("AT+QIACT=1", response, "OK", 150000)) {
+  if (!at.sendCommand("AT+QIACT=1", "OK")) {
     return false;
   }
 
-  if (!at.sendCommand("AT+CGATT=1", response, "OK", 60000)) {
+  if (!at.sendCommand("AT+CGATT=1", "OK")) {
     return false;
   }
 
@@ -46,4 +45,30 @@ String AsyncGSM::getSimCCID() {
     ccid = ccid.substring(0, end);
   ccid.trim();
   return ccid;
+}
+
+bool AsyncGSM::modemConnect(const char *host, uint16_t port) {
+  String response;
+  // AT+QIOPEN=1,0,"TCP","220.180.239.212",8009,0,0
+  // <PDPcontextID>(1-16), <connectID>(0-11),
+  // "TCP/UDP/TCP LISTENER/UDPSERVICE", "<IP_address>/<domain_name>",
+  // <remote_port>,<local_port>,<access_mode>(0-2; 0=buffer)
+  String portStr = String(std::to_string(port).c_str());
+  if (!at.sendCommand(response, "+QIOPEN:", 150000,
+                      "AT+QIOPEN=1,0,\"TCP\",\"", host, "\",", portStr.c_str(),
+                      ",0,0")) {
+    return false;
+  }
+  int idx = response.indexOf("+QIOPEN:");
+  if (idx == -1) {
+    return false;
+  }
+  String rest = response.substring(idx);
+  int comma = rest.indexOf(',');
+  if (comma == -1) {
+    return false;
+  }
+  String errStr = rest.substring(comma + 1);
+  errStr.trim();
+  return errStr.startsWith("0");
 }
