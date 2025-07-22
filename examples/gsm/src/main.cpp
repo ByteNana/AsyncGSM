@@ -1,4 +1,5 @@
 #include <Arduino.h>
+
 #include "AsyncGSM.h"
 
 AsyncGSM modem;
@@ -10,5 +11,4 @@ void setup() {
   modem.init(SerialAT);
 }
 
-void loop() {
-}
+void loop() {}
