@@ -4,7 +4,7 @@
 #include <AsyncATHandler.h>
 #include <Client.h>
 
-class AsyncGSM : Client {
+class AsyncGSM : public Client {
 private:
   uint8_t _connected;
 

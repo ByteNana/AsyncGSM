@@ -53,7 +53,7 @@ bool AsyncGSM::modemConnect(const char *host, uint16_t port) {
   // <PDPcontextID>(1-16), <connectID>(0-11),
   // "TCP/UDP/TCP LISTENER/UDPSERVICE", "<IP_address>/<domain_name>",
   // <remote_port>,<local_port>,<access_mode>(0-2; 0=buffer)
-  String portStr = String(std::to_string(port).c_str());
+  String portStr(port);
   if (!at.sendCommand(response, "+QIOPEN:", 150000, "AT+QIOPEN=1,0,\"TCP\",\"",
                       host, "\",", portStr.c_str(), ",0,0")) {
     return false;
