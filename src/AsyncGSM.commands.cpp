@@ -10,15 +10,9 @@ bool AsyncGSM::gprsDisconnect() {
 bool AsyncGSM::gprsConnect(const char *apn, const char *user, const char *pwd) {
   gprsDisconnect();
 
-  String cmd = String("AT+QICSGP=1,1,\"") + apn +
-               "\","
-               "" +
-               (user ? user : "") +
-               "\","
-               "" +
-               (pwd ? pwd : "") + "\"";
   String response;
-  if (!at.sendCommand(cmd, response, "OK", 1000)) {
+  if (!at.sendCommand(response, "OK", 1000, "AT+QICSGP=1,1,\"", apn, "\",\"",
+                      user ? user : "", "\", \"", pwd ? pwd : "\"")) {
     return false;
   }
 
