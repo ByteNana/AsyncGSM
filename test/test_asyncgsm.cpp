@@ -27,7 +27,7 @@ TEST(AsyncGSMTest, GprsConnectSendsCommands) {
     EXPECT_CALL(stream, write(::testing::_, ::testing::_))
         .WillOnce(Invoke([&](const uint8_t *buf, size_t size) {
           std::string cmd(reinterpret_cast<const char *>(buf), size);
-          EXPECT_EQ(cmd, "AT+QICSGP=1,1,\"apn\",\"user\", \"pwd\"");
+          EXPECT_EQ(cmd, "AT+QICSGP=1,1,\"apn\",\"user\",\"pwd\"");
           stream.InjectRxData("OK\r\n");
           return size;
         }));
