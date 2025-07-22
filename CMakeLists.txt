@@ -50,7 +50,13 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
   ${LIB_SRC_DIR}/*.h
 )
 
-add_library(AsyncGSM STATIC ${SRC_FILES})
+file(GLOB FREERTOS_MOCK_SRC
+  ${asyncathandler_SOURCE_DIR}/test/mocks/freertos/*.cpp
+  ${asyncathandler_SOURCE_DIR}/test/mocks/freertos/*/*.cpp
+)
+
+
+add_library(AsyncGSM STATIC ${SRC_FILES} ${FREERTOS_MOCK_SRC})
 
 target_include_directories(AsyncGSM PUBLIC
   ${LIB_SRC_DIR}
@@ -70,6 +76,28 @@ target_link_libraries(AsyncGSM PUBLIC
   AsyncATHandler # Link to the AsyncATHandler library target created by FetchContent_MakeAvailable
   gmock
   gtest
-  Unity
+  unity
 )
+
+# === TESTS ===
+enable_testing()
+
+file(GLOB TEST_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp)
+
+add_executable(AsyncGSM_test ${TEST_SRC})
+
+target_include_directories(AsyncGSM_test PRIVATE
+  ${LIB_SRC_DIR}
+  ${MOCK_INC_DIR}
+  ${asyncathandler_SOURCE_DIR}/test/mocks
+)
+
+target_link_libraries(AsyncGSM_test PRIVATE
+  AsyncATHandler
+  AsyncGSM
+  gmock_main
+  pthread
+)
+
+add_test(NAME AsyncGSM_test COMMAND AsyncGSM_test)
 
