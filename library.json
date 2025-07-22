@@ -1,5 +1,5 @@
 {
-  "name": "AsyncATHandler",
+  "name": "AsyncGSM",
   "version": "0.1.0",
   "description": "A library for handling AT commands asynchronously with an ESP32.",
   "keywords": ["arduino", "esp32", "at commands", "asynchronous"],
