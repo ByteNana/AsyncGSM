@@ -1,17 +1,18 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Client.h>
 #include <AsyncATHandler.h>
+#include <Client.h>
+
+#define TINY_GSM_MUX_COUNT 12
 
 class AsyncGSM : Client {
-  AsyncATHandler *at;
-  uint8_t mux;
-  uint16_t sock_available;
-  uint32_t prev_check;
-  bool sock_connected;
-  bool got_data;
-  // RxFifo rx;
+  AsyncATHandler at;
+  bool init(Stream &stream);
+  int connect(const char *host, uint16_t port) override;
+  void stop() override;
 
-  bool init(Stream *modem, uint8_t mux = 0);
+protected:
+  bool gprsDisconnect();
+  bool gprsConnect(const char *apn, const char *user = nullptr, const char *pwd = nullptr);
 };

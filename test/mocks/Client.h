@@ -1,7 +1,7 @@
 #pragma once
 
-#include <IPAddress.h>
-#include <Stream.h>
+#include "IPAddress.h"
+#include "Stream.h"
 
 class Client : public Stream {
 public:
