@@ -10,6 +10,27 @@ bool AsyncGSM::init(Stream &stream) {
   }
   return true;
 }
+bool AsyncGSM::begin(const char *apn) {
+  if (!at.sendCommand("AT+QSCLK=0", "OK")) {
+    log_e("Failed to disable sleep mode");
+    return false;
+  }
+
+  if (!gprsConnect(apn)) {
+    return false;
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    String resp;
+    if (at.sendCommand("AT+CGATT?", resp, "+CGATT:", 1000)) {
+      if (resp.indexOf("+CGATT: 1") != -1) {
+        return true;
+      }
+    }
+    delay(500);
+  }
+  return false;
+}
 
 int AsyncGSM::connect(IPAddress ip, uint16_t port) {
   return connect(ip.toString().c_str(), port);
