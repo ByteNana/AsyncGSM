@@ -11,7 +11,8 @@ bool AsyncGSM::gprsConnect(const char *apn, const char *user, const char *pwd) {
 
   String response;
   if (!at.sendCommand(response, "OK", 1000, "AT+QICSGP=1,1,\"", apn, "\",\"",
-                      user ? user : "", "\", \"", pwd ? pwd : "\"")) {
+                      (user && *user) ? user : "", "\", \"",
+                      (pwd && *pwd) ? pwd : "", "\"")) {
     return false;
   }
 

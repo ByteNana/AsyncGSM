@@ -20,8 +20,9 @@ make test
 ## Example
 
 A minimal sketch can be found in `examples/gsm`.
+An HTTP client demonstration is available in `examples/http_client`.
 
-For additional PlatformIO usage see the `examples/gsm` directory.
+For additional PlatformIO usage see the example directories.
 
 ## Hardware Tests
 
