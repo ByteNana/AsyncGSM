@@ -1,7 +1,8 @@
-#include "mocks.h"
 #include <Arduino.h>
 #include <AsyncGSM.h>
 #include <unity.h>
+
+#include "mocks.h"
 
 AsyncGSM modem;
 HardwareMockStream mockSerial;
