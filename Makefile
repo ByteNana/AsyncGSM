@@ -1,14 +1,18 @@
-.PHONY: all clean build setup format check-format test
+.PHONY: all clean build setup format check-format test esp32
 
-SRC_DIRS := src test
+# === CONFIG ===
+SRC_DIRS := src test examples
 EXTENSIONS := c cpp h hpp cc cxx hxx hh
 BUILD_DIR := build
 CCDB := compile_commands.json
 
-EXT_FILTER := $(foreach ext,$(EXTENSIONS), -name '*.$(ext)' -o)
-EXT_FILTER := $(wordlist 1,$(shell echo $$(($(words $(EXT_FILTER)) - 1))),$(EXT_FILTER))
+# Support for replacing spaces
+space := $(empty) $(empty)
 
-FILES := $(shell find $(SRC_DIRS) -type f \( $(EXT_FILTER) \))
+# === FILE COLLECTION ===
+FILES := $(shell git ls-files --cached --others --exclude-standard $(SRC_DIRS) | grep -E '\.($(subst $(space),|,$(EXTENSIONS)))$$')
+
+# === TARGETS ===
 
 all: build
 
@@ -22,11 +26,11 @@ build: setup
 
 test: build
 	@echo "🧪 Running unit tests..."
-	ctest --output-on-failure -j$(sysctl -n hw.ncpu) --test-dir build
+	ctest --output-on-failure -j$(shell sysctl -n hw.ncpu 2>/dev/null || nproc) --test-dir build
 
 esp32:
 	@echo "🚀 Flashing hardware test"
-	pio test -d examples/basic
+	pio test -d examples/gsm
 
 clean:
 	@echo "🧹 Cleaning up..."
