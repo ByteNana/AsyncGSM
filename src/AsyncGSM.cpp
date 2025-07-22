@@ -64,7 +64,8 @@ int AsyncGSM::read(uint8_t *buf, size_t size) {
   size_t bytesRead = 0;
   while (bytesRead < size && at._stream->available()) {
     int c = at._stream->read();
-    if (c < 0) break;  // No more data available
+    if (c < 0)
+      break; // No more data available
     buf[bytesRead++] = static_cast<uint8_t>(c);
   }
   return bytesRead;
@@ -86,6 +87,4 @@ void AsyncGSM::flush() {
   at._stream->flush();
 }
 
-uint8_t AsyncGSM::connected() {
-  return _connected;
-}
+uint8_t AsyncGSM::connected() { return _connected; }
