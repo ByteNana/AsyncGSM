@@ -20,8 +20,9 @@ make test
 ## Example
 
 A minimal sketch can be found in `examples/gsm`.
+An HTTP client demonstration is available in `examples/http_client`.
 
-For additional PlatformIO usage see the `examples/gsm` directory.
+For additional PlatformIO usage see the example directories.
 
 ## Hardware Tests
 
@@ -32,5 +33,5 @@ PlatformIO is installed and an ESP32 board is connected. Then run:
 make esp32-test
 ```
 
-This command flashes the hardware test suite onto the device and runs it using
-PlatformIO.
+This command flashes the hardware test suites for both examples onto the
+device and runs them using PlatformIO.

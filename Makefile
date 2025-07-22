@@ -31,10 +31,12 @@ test: build
 esp32:
 	@echo "🔨 Building for ESP32..."
 	pio ci  examples/gsm/src/main.cpp --lib="." --board=esp32dev
+	pio ci  examples/http_client/src/main.cpp --lib="." --board=esp32dev -O lib_deps="arduino-libraries/ArduinoHttpClient"
 
 esp32-test:
 	@echo "🚀 Flashing hardware test"
 	pio test -d examples/gsm
+	pio test -d examples/http_client
 
 clean:
 	@echo "🧹 Cleaning up..."
