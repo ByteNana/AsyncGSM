@@ -18,6 +18,28 @@ void test_get_sim_ccid() {
   TEST_ASSERT_EQUAL_STRING("01234567890123456789", ccid.c_str());
 }
 
+void test_get_imei() {
+  mockSerial.mockResponse("AT+CGSN\r\n123456789012345\r\nOK\r\n");
+  String imei = modem.getIMEI();
+  TEST_ASSERT_EQUAL_STRING("AT+CGSN\r\n", mockSerial.getSentData().c_str());
+  TEST_ASSERT_EQUAL_STRING("123456789012345", imei.c_str());
+}
+
+void test_get_operator() {
+  mockSerial.mockResponse("AT+COPS?\r\n+COPS: 0,0,\"MockTel\"\r\nOK\r\n");
+  String oper = modem.getOperator();
+  TEST_ASSERT_EQUAL_STRING("AT+COPS?\r\n", mockSerial.getSentData().c_str());
+  TEST_ASSERT_EQUAL_STRING("MockTel", oper.c_str());
+}
+
+void test_get_ip() {
+  mockSerial.mockResponse("AT+CGPADDR=1\r\n+CGPADDR: 1,10.0.0.2\r\nOK\r\n");
+  String ip = modem.getIPAddress();
+  TEST_ASSERT_EQUAL_STRING("AT+CGPADDR=1\r\n",
+                           mockSerial.getSentData().c_str());
+  TEST_ASSERT_EQUAL_STRING("10.0.0.2", ip.c_str());
+}
+
 void test_gprs_disconnect() {
   mockSerial.mockResponse("AT+QIDEACT=1\r\nOK\r\n");
   bool ok = modem.gprsDisconnect();

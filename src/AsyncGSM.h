@@ -10,6 +10,7 @@ private:
 
 public:
   bool init(Stream &stream);
+  bool begin(const char *apn = nullptr);
   int connect(IPAddress ip, uint16_t port) override;
   int connect(const char *host, uint16_t port) override;
   size_t write(uint8_t c) override;
@@ -23,6 +24,9 @@ public:
   uint8_t connected() override;
   operator bool() override { return true; }
   String getSimCCID();
+  String getIMEI();
+  String getOperator();
+  String getIPAddress();
   bool gprsDisconnect();
   bool gprsConnect(const char *apn, const char *user = nullptr,
                    const char *pwd = nullptr);
