@@ -16,5 +16,6 @@ public:
 protected:
   AsyncATHandler at;
   bool gprsDisconnect();
-  bool gprsConnect(const char *apn, const char *user = nullptr, const char *pwd = nullptr);
+  bool gprsConnect(const char *apn, const char *user = nullptr,
+                   const char *pwd = nullptr);
 };
