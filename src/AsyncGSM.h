@@ -4,6 +4,16 @@
 #include <AsyncATHandler.h>
 #include <Client.h>
 
+enum BG96RegStatus {
+  REG_NO_RESULT    = -1,
+  REG_UNREGISTERED = 0,
+  REG_SEARCHING    = 2,
+  REG_DENIED       = 3,
+  REG_OK_HOME      = 1,
+  REG_OK_ROAMING   = 5,
+  REG_UNKNOWN      = 4,
+};
+
 class AsyncGSM : public Client {
 private:
   uint8_t _connected;
@@ -27,6 +37,7 @@ public:
   String getIMEI();
   String getOperator();
   String getIPAddress();
+  bool isConnected();
   bool gprsDisconnect();
   bool gprsConnect(const char *apn, const char *user = nullptr,
                    const char *pwd = nullptr);
@@ -34,4 +45,6 @@ public:
 protected:
   AsyncATHandler at;
   bool modemConnect(const char *host, uint16_t port);
+  int8_t getRegistrationStatusXREG(const char* regCommand);
+  BG96RegStatus getRegistrationStatus();
 };

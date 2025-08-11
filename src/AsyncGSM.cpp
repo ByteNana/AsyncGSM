@@ -10,7 +10,51 @@ bool AsyncGSM::init(Stream &stream) {
   }
   return true;
 }
+
+
 bool AsyncGSM::begin(const char *apn) {
+  bool _canRead = false;
+  for (int i = 0; i < 4; i++) {
+    if (at.sendCommand("AT", "OK", 2000)) {
+      _canRead = true;
+      break;
+    }
+  }
+  if (!_canRead) {
+    log_e("Failed to communicate with modem");
+    return false;
+  }
+
+  if (!at.sendCommand("ATE0", "OK", 2000)) {
+    log_e("Failed to set echo off");
+    return false;
+  }
+
+  if (!at.sendCommand("AT+CGMI", "Quectel")) {
+    log_e("Failed to get modem manufacturer");
+    return false;
+  }
+
+  if (!at.sendCommand("AT+CGMM", "EG915U")) {
+    log_e("Failed to get modem model");
+    return false;
+  }
+
+  if (!at.sendCommand("AT+CTZU=1", "OK")) {
+    log_e("Failed to set time zone update");
+    return false;
+  }
+
+  while (!at.sendCommand("AT+CPIN?", "OK", 2000)) {
+    log_w("Waiting for SIM card...");
+    delay(1000);
+  }
+
+  for (int i = 0; i < 4; i++) {
+    String response;
+    at.sendCommand(response, "OK", 5000, "AT+QICLOSE=", String(i));
+  }
+
   if (!at.sendCommand("AT+QSCLK=0", "OK")) {
     log_e("Failed to disable sleep mode");
     return false;

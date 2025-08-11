@@ -1,4 +1,46 @@
 #include "AsyncGSM.h"
+#include "esp_log.h"
+
+bool stringContains(const String &str, const String &sub) {
+  return str.indexOf(sub) != -1;
+}
+
+int8_t AsyncGSM::getRegistrationStatusXREG(const char *regCommand) {
+  String response;
+  at.sendCommand(response, "OK", 5000, "AT+", regCommand, "?");
+  if (response.indexOf("+CREG:") == -1 &&
+      response.indexOf("+CGREG:") == -1 &&
+      response.indexOf("+CEREG:") == -1) {
+    return REG_NO_RESULT; // Error in command
+  }
+
+  int commaIndex = response.indexOf(',');
+  if (commaIndex != -1) {
+    return REG_NO_RESULT; // No registration result
+  }
+  response =  response.substring(commaIndex + 1);
+  response.trim();
+  log_w("Registration response: %s", response.c_str());
+  return response.toInt();
+}
+
+BG96RegStatus AsyncGSM::getRegistrationStatus() {
+  // Check first for EPS registration
+  BG96RegStatus epsStatus = (BG96RegStatus)getRegistrationStatusXREG("CEREG");
+
+  // If we're connected on EPS, great!
+  if (epsStatus == REG_OK_HOME || epsStatus == REG_OK_ROAMING) {
+    return epsStatus;
+  } else {
+    // Otherwise, check generic network status
+    return (BG96RegStatus)getRegistrationStatusXREG("CREG");
+  }
+}
+
+bool AsyncGSM::isConnected() {
+  BG96RegStatus s = getRegistrationStatus();
+  return (s == REG_OK_HOME || s == REG_OK_ROAMING);
+}
 
 bool AsyncGSM::gprsDisconnect() {
   // Deactivate the GPRS context
@@ -16,11 +58,11 @@ bool AsyncGSM::gprsConnect(const char *apn, const char *user, const char *pwd) {
     return false;
   }
 
-  if (!at.sendCommand("AT+QIACT=1", "OK")) {
+  if (!at.sendCommand("AT+QIACT=1", "OK", 150000)) {
     return false;
   }
 
-  if (!at.sendCommand("AT+CGATT=1", "OK")) {
+  if (!at.sendCommand("AT+CGATT=1", "OK", 60000)) {
     return false;
   }
 
