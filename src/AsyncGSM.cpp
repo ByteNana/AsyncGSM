@@ -11,7 +11,6 @@ bool AsyncGSM::init(Stream &stream) {
   return true;
 }
 
-
 bool AsyncGSM::begin(const char *apn) {
   bool _canRead = false;
   for (int i = 0; i < 4; i++) {
@@ -98,11 +97,26 @@ void AsyncGSM::stop() {
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }
 
 size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
+  // for ssl:  sendAT(GF("+QSSLSEND="), mux, ',', (uint16_t)len);
+
   if (!at._stream) {
     log_e("Stream not initialized");
     return 0;
   }
-  return at._stream->write(buf, size);
+
+  String removeMeLater;
+  if (!at.sendCommand(removeMeLater, ">", 5000, "AT+QISEND=0,", String(size))) {
+    log_e("Failed to send AT+QISEND command");
+    return 0;
+  }
+  at._stream->write(buf, size);
+  at._stream->flush();
+
+  if (!at.waitResponse("SEND OK", removeMeLater, 5000)) {
+    log_e("Failed to send data");
+    return 0;
+  }
+  return size;
 }
 
 int AsyncGSM::available() {

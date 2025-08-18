@@ -154,12 +154,20 @@ bool AsyncGSM::modemConnect(const char *host, uint16_t port) {
   // "TCP/UDP/TCP LISTENER/UDPSERVICE", "<IP_address>/<domain_name>",
   // <remote_port>,<local_port>,<access_mode>(0-2; 0=buffer)
   String portStr(port);
-  if (!at.sendCommand(response, "+QIOPEN:", 150000, "AT+QIOPEN=1,0,\"TCP\",\"",
+  if (!at.sendCommand(response, "OK", 15000, "AT+QIOPEN=1,0,\"TCP\",\"",
                       host, "\",", portStr.c_str(), ",0,0")) {
+    log_e("Failed to send QIOPEN command");
     return false;
   }
+
+  if (at.waitResponse("+QIOPEN", response, 15000) == 0) {
+    log_e("No response to QIOPEN : %s", response.c_str());
+    return false;
+  }
+
   int idx = response.indexOf("+QIOPEN:");
   if (idx == -1) {
+    log_e("No +QIOPEN: in response");
     return false;
   }
   String rest = response.substring(idx);
