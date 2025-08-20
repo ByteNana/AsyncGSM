@@ -17,8 +17,12 @@ enum BG96RegStatus {
 class AsyncGSM : public Client {
 private:
   uint8_t _connected;
+  String rxBuffer;  // Internal buffer for incoming data
+  bool endOfDataReached;  // Flag to indicate no more data available from modem
+  int consecutiveEmptyReads;  // Track consecutive empty QIRD responses
 
 public:
+  AsyncGSM();
   bool init(Stream &stream);
   bool begin(const char *apn = nullptr);
   int connect(IPAddress ip, uint16_t port) override;
@@ -33,10 +37,14 @@ public:
   void stop() override;
   uint8_t connected() override;
   operator bool() override { return true; }
+
+  // Information methods
   String getSimCCID();
   String getIMEI();
   String getOperator();
   String getIPAddress();
+
+  // Connection management
   bool isConnected();
   bool gprsDisconnect();
   bool gprsConnect(const char *apn, const char *user = nullptr,
@@ -47,4 +55,10 @@ protected:
   bool modemConnect(const char *host, uint16_t port);
   int8_t getRegistrationStatusXREG(const char* regCommand);
   BG96RegStatus getRegistrationStatus();
+
+  // Data parsing
+  bool parseQIRDResponse(const String& response);
+
+  // HttpClient compatibility
+  int timedRead() override;
 };
