@@ -16,23 +16,6 @@ bool AsyncGSM::init(Stream &stream) {
     return true;
 }
 
-int AsyncGSM::timedRead() {
-    log_d("timedRead() called");
-    unsigned long startTime = millis();
-    const unsigned long timeout = 1000;
-
-    while (millis() - startTime < timeout) {
-        int c = read();
-        if (c >= 0) {
-            return c;
-        }
-        delay(10);
-    }
-
-    log_d("timedRead timeout");
-    return -1;
-}
-
 bool AsyncGSM::begin(const char *apn) {
     bool _canRead = false;
     for (int i = 0; i < 4; i++) {
@@ -148,7 +131,7 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
     at._stream->write(buf, size);
     at._stream->flush();
 
-    if (!at.waitResponse(15000, "SEND OK") || at.getResponse("SEND OK").empty()) {
+    if (!at.waitResponse(15000, "SEND OK") || at.getResponse("SEND OK").isEmpty()) {
         log_e("Failed to get SEND OK confirmation");
         return 0;
     }

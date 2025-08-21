@@ -58,7 +58,4 @@ protected:
 
   // Data parsing
   bool parseQIRDResponse(const String& response);
-
-  // HttpClient compatibility
-  int timedRead() override;
 };
