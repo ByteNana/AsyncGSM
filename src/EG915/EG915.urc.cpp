@@ -43,45 +43,41 @@ void AsyncEG915U::handleURC(const String &urc) {
   }
 
   if (trimmed.startsWith("+QIURC: \"recv\"")) {
-    // Find the start of the data length.
-    int lenStart = trimmed.indexOf(',', trimmed.indexOf(',') + 1);
-    if (lenStart == -1) {
-      log_e("URC: Failed to parse data length from +QIURC");
+    // +QIURC: "recv"
+    // Indicates that data has been received and is ready to be read with +QIRD
+    log_i("URC: Data received, ready to read with +QIRD");
+    at->getStream()->print("AT+QIRD=0");
+    at->getStream()->print("\r\n");
+    at->getStream()->flush();
+  }
+
+  if (trimmed.startsWith("+QIRD:")) {
+    // +QIRD: <len>
+    // Example: +QIRD: 728
+
+    int headerStart = trimmed.indexOf(':') + 1;
+    String header = trimmed.substring(headerStart);
+    header.trim();
+
+    int dataLen = header.toInt();
+    if (dataLen <= 0) {
+      log_e("QIRD: Invalid length");
       return;
     }
+    log_d("QIRD: Data length = %d", dataLen);
 
-    // Parse the length of the incoming data.
-    String lenStr = trimmed.substring(lenStart + 1);
-    int lenEnd = lenStr.indexOf(',');
-    if (lenEnd != -1) {
-      lenStr = lenStr.substring(0, lenEnd);
-    }
-    int dataLen = lenStr.toInt();
-
-    log_d("URC: Data size: %d", dataLen);
-
-    // Find the start of the data itself.
-    int dataStart = trimmed.indexOf(',', lenStart + 1);
-    dataStart = trimmed.indexOf(',', dataStart + 1);
-    dataStart = trimmed.indexOf('"', dataStart + 1);
-    if (dataStart == -1) {
-      log_e("URC: Failed to find data in +QIURC");
-      return;
-    }
-
-    // Extract the data string.
     rxBuffer->clear();
-    String data = urc.substring(dataStart + 1);
-    data.replace("\"", "");
-    (*rxBuffer) += data;
-
-    int toRead = dataLen - data.length() - 1;
-    for (int i = 0; i < toRead; i++) {
+    for (int i = 0; i < dataLen; i++) {
+      while (!at->getStream()->available()) {
+        delay(1);
+      }
       char c = (char)at->getStream()->read();
       (*rxBuffer) += c;
     }
 
-    log_i("URC: Received %u bytes of data", rxBuffer->length());
-    log_d("URC: Data content: %s", rxBuffer->c_str());
+    log_i("QIRD: Received %d bytes", rxBuffer->length());
+    log_d("QIRD: Data content: %s", rxBuffer->c_str());
+
+    String okLine = at->getStream()->readStringUntil('\n');
   }
 }

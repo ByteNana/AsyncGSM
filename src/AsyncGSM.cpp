@@ -135,6 +135,10 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   bool promptReceived = promise->expect(">")->wait();
   if (!promptReceived) {
     log_e("Did not receive prompt '>'");
+    ATResponse *resp = promise->getResponse();
+    if (resp) {
+      log_d("Full response:\n%s", resp->getFullResponse().c_str());
+    }
     at.popCompletedPromise(promise->getId());
     return 0;
   }
@@ -155,6 +159,9 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 }
 
 int AsyncGSM::available() {
+  if (modem.URCState.isConnected != 1) {
+    return -1;
+  }
   log_d("Checking available bytes in buffer...");
 #ifdef ON_UNIT_TESTS
   const char *cmd = "AT+QIRD\r\n";
@@ -205,4 +212,4 @@ void AsyncGSM::flush() {
   at.getStream()->flush();
 }
 
-uint8_t AsyncGSM::connected() { return _connected; }
+uint8_t AsyncGSM::connected() { return modem.URCState.isConnected; }
