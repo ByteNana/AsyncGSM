@@ -8,8 +8,7 @@
 
 class AsyncGSM : public Client {
 private:
-  uint8_t _connected;
-  String rxBuffer;
+  std::deque<uint8_t> rxBuffer;
   bool endOfDataReached;
   int consecutiveEmptyReads;
 
@@ -32,7 +31,7 @@ public:
   void flush() override;
   void stop() override;
   uint8_t connected() override;
-  operator bool() override { return true; }
+  operator bool() override { return connected(); }
 
   // Information methods
   String getSimCCID();

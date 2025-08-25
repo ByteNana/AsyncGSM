@@ -1,6 +1,8 @@
 #pragma once
 
-enum RegStatus {
+#include <atomic>
+
+enum class RegStatus {
   REG_NO_RESULT = -1,
   REG_UNREGISTERED = 0,
   REG_SEARCHING = 2,
@@ -10,7 +12,13 @@ enum RegStatus {
   REG_UNKNOWN = 4,
 };
 
+enum class ConnectionStatus {
+  DISCONNECTED,
+  FAILED,
+  CONNECTED,
+};
+
 struct UrcState {
-  volatile RegStatus creg = REG_NO_RESULT;
-  volatile int isConnected = 0;
+  std::atomic<RegStatus> creg{RegStatus::REG_NO_RESULT};
+  std::atomic<ConnectionStatus> isConnected{ConnectionStatus::DISCONNECTED};
 };

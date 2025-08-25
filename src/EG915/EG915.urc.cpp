@@ -15,12 +15,13 @@ void AsyncEG915U::handleURC(const String &urc) {
       int endPos = statusStr.indexOf(',');
       if (endPos != -1)
         statusStr = statusStr.substring(0, endPos);
-      URCState.creg = (RegStatus)statusStr.toInt();
-      log_i("URC: Registration status updated to %d", URCState.creg);
+      URCState.creg.store((RegStatus)statusStr.toInt());
+      log_i("URC: Registration status updated to %d", URCState.creg.load());
     }
   }
   if (trimmed.startsWith("+QIOPEN:")) {
     log_d("URC: +QIOPEN received");
+    rxBuffer->clear();
     int firstComma = trimmed.indexOf(',');
     if (firstComma != -1) {
       String resultStr = trimmed.substring(firstComma + 1);
@@ -29,22 +30,21 @@ void AsyncEG915U::handleURC(const String &urc) {
         resultStr = resultStr.substring(0, endPos);
       int result = resultStr.toInt();
       if (result == 0) {
-        URCState.isConnected = 1;
+        URCState.isConnected.store(ConnectionStatus::CONNECTED);
         log_i("URC: Connection opened successfully");
       } else {
-        URCState.isConnected = 0;
+        URCState.isConnected.store(ConnectionStatus::FAILED);
         log_e("URC: Connection failed with error %d", result);
       }
     }
   }
 
   if (trimmed.startsWith("+QICLOSE:")) {
-    URCState.isConnected = 0;
+    URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
     log_i("URC: Connection closed");
   }
 
   if (trimmed.startsWith("+QIURC: \"recv\"")) {
-    rxBuffer->clear();
     // +QIURC: "recv"
     // Indicates that data has been received and is ready to be read with +QIRD
     log_i("URC: Data received, ready to read with +QIRD");
@@ -54,21 +54,15 @@ void AsyncEG915U::handleURC(const String &urc) {
   }
 
   if (trimmed.startsWith("+QIRD:")) {
-#ifdef ON_UNIT_TESTS
-    if (rxBuffer->length())
-      return;
-#endif
-    rxBuffer->clear();
     // +QIRD: <len>
     // Example: +QIRD: 728
 
-    int headerStart = trimmed.indexOf(':') + 1;
-    if (headerStart == 0) {
+    int headerStart = urc.indexOf(':');
+    if (headerStart == -1) {
       log_e(">>>>>>>>>>>>URC: Failed to parse data length from +QIURC");
       return;
     }
-    String header = trimmed.substring(headerStart);
-    header.trim();
+    String header = urc.substring(headerStart + 1);
 
     int dataLen = header.toInt();
     if (dataLen <= 0) {
@@ -77,31 +71,25 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
     log_d("QIRD: Data length = %d", dataLen);
 
-    // Find the start of the data itself.
-    int dataStart = urc.indexOf('\n');
-    if (dataStart == -1) {
-      log_e(">>>>>>>>>URC: Failed to find data in +QIURC");
-      return;
+    while (at->getStream()->available()) {
+      char c = at->getStream()->read();
+      if (dataLen >= 0) {
+        rxBuffer->push_back(c);
+      } else {
+        printf("QIRD: Extra byte received: %c\n", c);
+      }
+      dataLen--;
     }
 
-    String data = urc.substring(dataStart + 1);
-    data.replace("\"", "");
-    (*rxBuffer) += data;
-
-    int toRead = dataLen - data.length() - 1;
-    for (int i = 0; i < toRead; i++) {
-      char c = (char)at->getStream()->read();
-      (*rxBuffer) += c;
+    log_i("QIRD: Received %d bytes", (int)rxBuffer->size());
+    for (uint8_t b : *rxBuffer) {
+      printf("%c", b);
     }
-
-    log_i("QIRD: Received %d bytes", rxBuffer->length());
-    log_d("QIRD: Data content: %s", rxBuffer->c_str());
-
-    String remaining;
-    for (int i = 0; i < 3; i++) {
-      char c = (char)at->getStream()->read();
-      remaining += c;
+    printf("\n");
+    if (rxBuffer->size() < dataLen) {
+      at->getStream()->print("AT+QIRD=0");
+      at->getStream()->print("\r\n");
+      at->getStream()->flush();
     }
-    log_d("QIRD: Remaining data after read: %s", remaining.c_str());
   }
 }

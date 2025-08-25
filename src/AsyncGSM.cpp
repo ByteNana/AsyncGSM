@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <limits>
 
-AsyncGSM::AsyncGSM() : _connected(false) {}
+AsyncGSM::AsyncGSM() {}
 
 AsyncGSM::~AsyncGSM() {
   if (at.getStream()) {
@@ -12,7 +12,6 @@ AsyncGSM::~AsyncGSM() {
 }
 
 bool AsyncGSM::init(Stream &stream) {
-  _connected = false;
   log_i("Initializing AsyncGSM...");
   if (!at.begin(stream)) {
     log_e("Failed to initialize AsyncATHandler");
@@ -23,7 +22,9 @@ bool AsyncGSM::init(Stream &stream) {
   return true;
 }
 
-RegStatus AsyncGSM::getRegistrationStatus() { return modem.URCState.creg; }
+RegStatus AsyncGSM::getRegistrationStatus() {
+  return modem.URCState.creg.load();
+}
 
 bool AsyncGSM::begin(const char *apn) {
   bool canCommunicate = false;
@@ -90,14 +91,11 @@ int AsyncGSM::connect(IPAddress ip, uint16_t port) {
 
 int AsyncGSM::connect(const char *host, uint16_t port) {
   log_i("Connecting to %s:%d", host, port);
-  stop();
-  _connected = modemConnect(host, port);
-  return _connected ? 1 : 0;
+  return modemConnect(host, port);
 }
 
 void AsyncGSM::stop() {
   log_i("Stopping connection...");
-  _connected = false;
   ATPromise *promise = at.sendCommand("AT+QICLOSE=0");
   if (!promise->wait()) {
     at.popCompletedPromise(promise->getId());
@@ -105,6 +103,8 @@ void AsyncGSM::stop() {
     return;
   }
   at.popCompletedPromise(promise->getId());
+  modem.URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
+
   ATPromise *deactPromise = at.sendCommand("AT+QIDEACT=1");
   if (!deactPromise->wait()) {
     at.popCompletedPromise(deactPromise->getId());
@@ -118,7 +118,8 @@ void AsyncGSM::stop() {
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }
 
 size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
-  if (!_connected || !at.getStream()) {
+  if (modem.URCState.isConnected.load() != ConnectionStatus::CONNECTED ||
+      !at.getStream()) {
     log_e("Not connected or stream not initialized");
     return 0;
   }
@@ -141,13 +142,19 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
     return 0;
   }
 
-  bool promptReceived = promise->expect(">")->wait();
-  if (!promptReceived) {
-    log_e("Did not receive prompt '>'");
-    ATResponse *resp = promise->getResponse();
-    if (resp) {
-      log_d("Full response:\n%s", resp->getFullResponse().c_str());
+  while(!at.getStream()->available()) {
+    vTaskDelay(0);
+  }
+  String response;
+  while (at.getStream()->available()) {
+    char c = at.getStream()->read();
+    response += c;
+    if (c == '>') {
+      break;
     }
+  }
+  if (response.indexOf('>') == -1) {
+    log_e("Did not receive prompt '>'");
     at.popCompletedPromise(promise->getId());
     return 0;
   }
@@ -155,7 +162,7 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   at.getStream()->write(buf, size);
   at.getStream()->flush();
 
-  promptReceived = promise->expect("SEND OK")->wait();
+  bool promptReceived = promise->expect("SEND OK")->wait();
 
   auto p = at.popCompletedPromise(promise->getId());
   if (!promptReceived) {
@@ -168,45 +175,38 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 }
 
 int AsyncGSM::available() {
-  log_d("Checking available bytes in buffer...");
-#ifdef ON_UNIT_TESTS
-  const char *cmd = "AT+QIRD\r\n";
-  at.getStream()->print(cmd);
-  at.getStream()->print("\r\n");
-  at.getStream()->flush();
-  vTaskDelay(pdMS_TO_TICKS(100));
-#endif
-  return rxBuffer.length();
+  vTaskDelay(pdMS_TO_TICKS(10));
+
+  return (int)rxBuffer.size();
 }
 
 int AsyncGSM::read() {
-  if (rxBuffer.length() == 0) {
-    return -1;
-  }
-
-  char c = rxBuffer.charAt(0);
-  rxBuffer = rxBuffer.substring(1);
+  log_d("read() called...");
+  char c = rxBuffer.front();
+  rxBuffer.pop_front();
   return c;
 }
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {
   log_d("Reading up to %zu bytes from buffer...", size);
-  if (rxBuffer.length() == 0 || size == 0) {
+  if (rxBuffer.empty() || size == 0) {
     return 0;
   }
 
-  size_t toCopy = min(size, (size_t)rxBuffer.length());
-  memcpy(buf, rxBuffer.c_str(), toCopy);
-  rxBuffer = rxBuffer.substring(toCopy);
+  size_t toCopy = min(size, rxBuffer.size());
+  for (size_t i = 0; i < toCopy; i++) {
+    buf[i] = rxBuffer.front();
+    rxBuffer.pop_front();
+  }
   return toCopy;
 }
 
 int AsyncGSM::peek() {
   log_d("Peeking into buffer...");
-  if (rxBuffer.length() == 0) {
+  if (rxBuffer.size() == 0) {
     return -1;
   }
-  return rxBuffer.charAt(0);
+  return rxBuffer.front();
 }
 
 void AsyncGSM::flush() {
@@ -218,4 +218,6 @@ void AsyncGSM::flush() {
   at.getStream()->flush();
 }
 
-uint8_t AsyncGSM::connected() { return modem.URCState.isConnected; }
+uint8_t AsyncGSM::connected() {
+  return modem.URCState.isConnected.load() == ConnectionStatus::CONNECTED;
+}

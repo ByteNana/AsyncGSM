@@ -3,7 +3,7 @@
 
 bool AsyncGSM::isConnected() {
   RegStatus s = getRegistrationStatus();
-  return (s == REG_OK_HOME || s == REG_OK_ROAMING);
+  return (s == RegStatus::REG_OK_HOME || s == RegStatus::REG_OK_ROAMING);
 }
 
 bool AsyncGSM::modemConnect(const char *host, uint16_t port) {

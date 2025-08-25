@@ -10,7 +10,7 @@ class AsyncEG915U {
 private:
   Stream *_stream = nullptr;
   AsyncATHandler *at;
-  String *rxBuffer;
+  std::deque<uint8_t> *rxBuffer;
 
   void handleURC(const String &urc);
 
@@ -19,7 +19,7 @@ public:
 
   AsyncEG915U();
   ~AsyncEG915U();
-  bool init(Stream &stream, AsyncATHandler &atHandler, String &rxBuf);
+  bool init(Stream &stream, AsyncATHandler &atHandler, std::deque<uint8_t> &rxBuf);
   bool setEchoOff();
   bool enableVerboseErrors();
   bool checkModemModel();

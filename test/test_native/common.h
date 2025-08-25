@@ -111,6 +111,28 @@ protected:
   }
 };
 
+inline void scheduleInject(class MockStream *stream, uint32_t delayMs,
+                           std::string payload) {
+  struct Ctx {
+    MockStream *s;
+    std::string p;
+    uint32_t d;
+  };
+  auto th = [](void *pv) {
+    std::unique_ptr<Ctx> ctx(static_cast<Ctx *>(pv)); // RAII
+    vTaskDelay(pdMS_TO_TICKS(ctx->d));
+    ctx->s->InjectRxData(ctx->p);
+    vTaskDelete(nullptr);
+  };
+  auto *ctx = new Ctx{stream, std::move(payload), delayMs};
+  printf("Scheduling inject of %zu bytes in %u ms\n", ctx->p.size(), ctx->d);
+  if (xTaskCreate(th, "DelayedInject", configMINIMAL_STACK_SIZE + 2000, ctx, 1,
+                  nullptr) != pdPASS) {
+    printf("Failed to create inject task\n");
+    delete ctx;
+  }
+}
+
 inline void InjectDataWithDelay(class MockStream *mockStream,
                                 const std::string &data,
                                 uint32_t delayMs = 50) {

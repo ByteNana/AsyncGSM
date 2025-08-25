@@ -10,7 +10,7 @@ AsyncEG915U::~AsyncEG915U() {
 }
 
 bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
-                       String &rxBuf) {
+                       std::deque<uint8_t> &rxBuf) {
   at = &atHandler;
   _stream = &stream;
   rxBuffer = &rxBuf;
@@ -299,29 +299,25 @@ String AsyncEG915U::getIPAddress() {
 
 bool AsyncEG915U::connect(const char *host, uint16_t port) {
   String portStr(port);
-  URCState.isConnected = 0;
+  URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
   ATPromise *promise = at->sendCommand(String("AT+QIOPEN=1,0,\"TCP\",\"") +
                                        host + "\"," + portStr + ",0,0");
 
-  if(!promise->timeout(10000)->wait()) {
-    log_e("Failed to initiate connection");
-    at->popCompletedPromise(promise->getId());
-    return false;
-  }
   at->popCompletedPromise(promise->getId());
 
   for (int i = 0; i < 20; i++) {
-    if (URCState.isConnected == 1) {
+    ConnectionStatus status = URCState.isConnected.load();
+    if (status == ConnectionStatus::CONNECTED ||
+        status == ConnectionStatus::FAILED) {
       break;
     }
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 
-
-  if (URCState.isConnected) {
+  if (URCState.isConnected.load() == ConnectionStatus::CONNECTED) {
     log_i("Connection URC received successfully");
   } else {
     log_e("No +QIOPEN URC received or it indicated failure");
   }
-  return URCState.isConnected == 1;
+  return URCState.isConnected.load() == ConnectionStatus::CONNECTED;
 }

@@ -155,7 +155,7 @@ target_compile_definitions(AsyncATHandler PUBLIC LOG_LEVEL=${LOG_LEVEL})
 
 # === TESTS ===
 if(ASYNCGSM_BUILD_TESTS)
-  add_compile_definitions(LOG_LEVEL=${LOG_LEVEL} ON_UNIT_TESTS=1)
+  add_compile_definitions(LOG_LEVEL=${LOG_LEVEL} LOGGING=1)
   enable_testing()
 
   # Get any existing mock FreeRTOS sources (keeping for backward compatibility)
