@@ -133,26 +133,19 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   }
 
   bool promptReceived = promise->expect(">")->wait();
-  auto p = at.popCompletedPromise(promise->getId());
   if (!promptReceived) {
     log_e("Did not receive prompt '>'");
+    at.popCompletedPromise(promise->getId());
     return 0;
   }
 
   at.getStream()->write(buf, size);
   at.getStream()->flush();
 
-  ATPromise *dataPromise = at.sendCommand("");
-  if (!dataPromise) {
-    log_e("Failed to create promise for final response");
-    at.popCompletedPromise(dataPromise->getId());
-    return 0;
-  }
+  promptReceived = promise->expect("SEND OK")->wait();
 
-  bool sendOkReceived = dataPromise->expect("SEND OK")->wait();
-  auto p2 = at.popCompletedPromise(dataPromise->getId());
-
-  if (!sendOkReceived) {
+  auto p = at.popCompletedPromise(promise->getId());
+  if (!promptReceived) {
     log_e("Failed to get SEND OK confirmation");
     return 0;
   }
