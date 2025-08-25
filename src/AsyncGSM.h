@@ -4,25 +4,21 @@
 #include <AsyncATHandler.h>
 #include <Client.h>
 
-enum BG96RegStatus {
-  REG_NO_RESULT    = -1,
-  REG_UNREGISTERED = 0,
-  REG_SEARCHING    = 2,
-  REG_DENIED       = 3,
-  REG_OK_HOME      = 1,
-  REG_OK_ROAMING   = 5,
-  REG_UNKNOWN      = 4,
-};
+#include "EG915/EG915.h"
 
 class AsyncGSM : public Client {
 private:
   uint8_t _connected;
-  String rxBuffer;  // Internal buffer for incoming data
-  bool endOfDataReached;  // Flag to indicate no more data available from modem
-  int consecutiveEmptyReads;  // Track consecutive empty QIRD responses
+  String rxBuffer;
+  bool endOfDataReached;
+  int consecutiveEmptyReads;
 
 public:
+  AsyncEG915U modem;
+  AsyncATHandler at;
+
   AsyncGSM();
+  ~AsyncGSM();
   bool init(Stream &stream);
   bool begin(const char *apn = nullptr);
   int connect(IPAddress ip, uint16_t port) override;
@@ -47,15 +43,12 @@ public:
   // Connection management
   bool isConnected();
   bool gprsDisconnect();
-  bool gprsConnect(const char *apn, const char *user = nullptr,
-                   const char *pwd = nullptr);
 
 protected:
-  AsyncATHandler at;
   bool modemConnect(const char *host, uint16_t port);
-  int8_t getRegistrationStatusXREG(const char* regCommand);
-  BG96RegStatus getRegistrationStatus();
+  int8_t getRegistrationStatusXREG(const char *regCommand);
+  RegStatus getRegistrationStatus();
 
   // Data parsing
-  bool parseQIRDResponse(const String& response);
+  bool parseQIRDResponse(const String &response);
 };

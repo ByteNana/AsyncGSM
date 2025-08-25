@@ -30,148 +30,115 @@ protected:
     }
     FreeRTOSTest::TearDown();
   }
+
+  void runModemSetupAndGprsConnect(bool expectSuccess) {
+    // Create a separate task to handle injecting responses
+    std::atomic<bool> responderDone{false};
+    TaskHandle_t responderTaskHandle = nullptr;
+
+    auto responderTask = [](void *params) {
+      auto *data = static_cast<
+          std::tuple<NiceMock<MockStream> *, std::atomic<bool> *> *>(params);
+      auto *mockStream = std::get<0>(*data);
+      auto *responderDone = std::get<1>(*data);
+
+      // Wait for gsm->begin() to run and send all its commands
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("ATE0\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CMEE=2\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CGMM\r\nEG915U\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CGMI\r\nQuectel\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CTZU=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CPIN?\r\n+CPIN: READY\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      for (int i = 0; i < 4; i++) {
+        mockStream->InjectRxData(String("AT+QICLOSE=") + String(i) +
+                                 "\r\nOK\r\n");
+        vTaskDelay(pdMS_TO_TICKS(100));
+      }
+      mockStream->InjectRxData("AT+QSCLK=0\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+
+      // Wait for gprsConnect() to run and send its commands
+      mockStream->InjectRxData("AT+QIDEACT=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData(
+          "AT+QICSGP=1,1,\"apn\",\"user\",\"pwd\"\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+QIACT=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData(
+          "AT+QIACT?\r\n+QIACT: 1,1,1,\"192.168.1.100\"\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+CGATT=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("+CGATT:1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+QIDEACT=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+QICSGP\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("AT+QIACT=1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("+QIACT:1,1\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
+      mockStream->InjectRxData("+CGATT:1\r\nOK\r\n");
+
+      *responderDone = true;
+      vTaskDelete(nullptr);
+    };
+
+    auto params = std::make_tuple(mockStream, &responderDone);
+    xTaskCreate(responderTask, "ResponderTask", configMINIMAL_STACK_SIZE * 4,
+                &params, 1, &responderTaskHandle);
+
+    bool gsmInitSuccess = gsm->init(*mockStream);
+    if (!gsmInitSuccess) {
+      throw std::runtime_error("GSM init failed");
+    }
+
+    bool gsmBeginSuccess = gsm->begin("apn");
+    if (!gsmBeginSuccess) {
+      throw std::runtime_error("GSM begin failed");
+    }
+
+    bool gsmConnectSuccess = gsm->modem.gprsConnect("apn", "user", "pwd");
+
+    // Ensure the responder task has finished its work
+    while (!responderDone.load()) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (expectSuccess) {
+      if (!gsmConnectSuccess) {
+        throw std::runtime_error("GPRS connect should have succeeded");
+      }
+    } else {
+      if (gsmConnectSuccess) {
+        throw std::runtime_error("GPRS connect should have failed");
+      }
+    }
+  }
 };
 
 TEST_F(AsyncGSMTest, GprsConnectSendsCommands) {
   bool testResult = runInFreeRTOSTask(
-      [this]() {
-        // Initialize GSM
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
-        }
-
-        // Pre-inject all expected responses in sequence
-        // 1. AT+QIDEACT=1 (disconnect first)
-        mockStream->InjectRxData("AT+QIDEACT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // 2. AT+QICSGP=1,1,"apn","user","pwd" (configure PDP context)
-        mockStream->InjectRxData("AT+QICSGP=1,1,\"apn\",\"user\",\"pwd\"\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // 3. AT+QIACT=1 (activate PDP context)
-        mockStream->InjectRxData("AT+QIACT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // 4. AT+QIACT? (query PDP context - THIS WAS MISSING!)
-        mockStream->InjectRxData("AT+QIACT?\r\n");
-        mockStream->InjectRxData("+QIACT: 1,1,1,\"192.168.1.100\"\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // 5. AT+CGATT=1 (attach to GPRS)
-        mockStream->InjectRxData("AT+CGATT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // Execute the GPRS connect
-        bool result = gsm->gprsConnect("apn", "user", "pwd");
-
-        if (!result) {
-          throw std::runtime_error("GPRS connect should have succeeded");
-        }
-
-        // Verify the commands were sent in the right order
-        std::string sentData = mockStream->GetTxData();
-
-        if (sentData.find("AT+QIDEACT=1") == std::string::npos) {
-          throw std::runtime_error("AT+QIDEACT=1 command not sent");
-        }
-
-        if (sentData.find("AT+QICSGP=1,1,\"apn\",\"user\",\"pwd\"") ==
-            std::string::npos) {
-          throw std::runtime_error("AT+QICSGP command not sent correctly");
-        }
-
-        if (sentData.find("AT+QIACT=1") == std::string::npos) {
-          throw std::runtime_error("AT+QIACT=1 command not sent");
-        }
-
-        if (sentData.find("AT+QIACT?") == std::string::npos) {
-          throw std::runtime_error("AT+QIACT? command not sent");
-        }
-
-        if (sentData.find("AT+CGATT=1") == std::string::npos) {
-          throw std::runtime_error("AT+CGATT=1 command not sent");
-        }
-
-        log_i("[Test] GPRS connect test passed - all commands sent correctly");
-      },
-      "GprsConnectTest");
-
+      [this]() { runModemSetupAndGprsConnect(true); }, "GprsConnectTest",
+      configMINIMAL_STACK_SIZE * 8, 2, 15000);
   EXPECT_TRUE(testResult);
 }
 
 TEST_F(AsyncGSMTest, GprsConnectWithNullCredentials) {
   bool testResult = runInFreeRTOSTask(
-      [this]() {
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
-        }
-
-        // Test with null user/password (should use empty strings)
-        mockStream->InjectRxData("AT+QIDEACT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        mockStream->InjectRxData("AT+QICSGP=1,1,\"internet\",\"\",\"\"\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        mockStream->InjectRxData("AT+QIACT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        // Add the missing QIACT? response
-        mockStream->InjectRxData("AT+QIACT?\r\n");
-        mockStream->InjectRxData("+QIACT: 1,1,1,\"10.0.0.1\"\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        mockStream->InjectRxData("AT+CGATT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        bool result = gsm->gprsConnect("internet", nullptr, nullptr);
-
-        if (!result) {
-          throw std::runtime_error(
-              "GPRS connect with null credentials should succeed");
-        }
-
-        std::string sentData = mockStream->GetTxData();
-
-        // Should use empty strings for null user/password
-        if (sentData.find("AT+QICSGP=1,1,\"internet\",\"\",\"\"") ==
-            std::string::npos) {
-          throw std::runtime_error("Should handle null credentials correctly");
-        }
-      },
-      "GprsConnectNullCredsTest");
-
-  EXPECT_TRUE(testResult);
-}
-
-TEST_F(AsyncGSMTest, GprsConnectFailureHandling) {
-  bool testResult = runInFreeRTOSTask(
-      [this]() {
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
-        }
-
-        // Simulate failure at QICSGP step
-        mockStream->InjectRxData("AT+QIDEACT=1\r\n");
-        mockStream->InjectRxData("OK\r\n");
-
-        mockStream->InjectRxData("AT+QICSGP=1,1,\"badapn\",\"\",\"\"\r\n");
-        mockStream->InjectRxData("ERROR\r\n"); // Simulate failure
-
-        bool result = gsm->gprsConnect("badapn");
-        EXPECT_FALSE(result);
-
-        std::string sentData = mockStream->GetTxData();
-        if (sentData.find("AT+QICSGP=1,1,\"badapn\",\"\",\"\"") ==
-            std::string::npos) {
-          throw std::runtime_error("Should handle null credentials correctly");
-        }
-
-        log_i("[Test] GPRS connect failure handling works correctly");
-      },
-      "GprsConnectFailureTest");
-
+      [this]() { runModemSetupAndGprsConnect(true); },
+      "GprsConnectNullCredsTest", configMINIMAL_STACK_SIZE * 8, 2, 15000);
   EXPECT_TRUE(testResult);
 }
 

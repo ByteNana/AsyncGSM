@@ -1,13 +1,14 @@
 #pragma once
 
 #include "FreeRTOSConfig.h"
+#include "Stream.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include <atomic>
 #include <chrono>
 #include <functional>
 #include <gtest/gtest.h>
 #include <thread>
-#include "esp_log.h"
 
 class GlobalSchedulerEnvironment : public ::testing::Environment {
 private:
@@ -109,3 +110,27 @@ protected:
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 };
+
+inline void InjectDataWithDelay(class MockStream *mockStream,
+                                const std::string &data,
+                                uint32_t delayMs = 50) {
+  struct InjectorData {
+    MockStream *stream;
+    std::string data;
+    uint32_t delay;
+  };
+
+  auto *injectorData = new InjectorData{mockStream, data, delayMs};
+
+  auto injectorTask = [](void *pvParameters) {
+    auto *data = static_cast<InjectorData *>(pvParameters);
+    vTaskDelay(pdMS_TO_TICKS(data->delay));
+    data->stream->InjectRxData(data->data);
+    delete data;
+    vTaskDelete(nullptr);
+  };
+
+  TaskHandle_t injectorHandle = nullptr;
+  xTaskCreate(injectorTask, "InjectorTask", configMINIMAL_STACK_SIZE * 2,
+              injectorData, 1, &injectorHandle);
+}

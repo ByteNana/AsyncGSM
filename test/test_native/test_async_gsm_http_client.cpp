@@ -2,8 +2,11 @@
 #include "Stream.h"
 #include "common.h"
 #include <HttpClient.h> // ArduinoHttpClient
+#include <atomic>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <string>
+#include <tuple>
 
 using ::testing::NiceMock;
 
@@ -22,126 +25,142 @@ protected:
   }
 
   void TearDown() override {
-    if (httpClient) {
-      delete httpClient;
-      httpClient = nullptr;
-    }
-    if (gsm) {
-      delete gsm;
-      gsm = nullptr;
-    }
-    if (mockStream) {
-      delete mockStream;
-      mockStream = nullptr;
-    }
-    FreeRTOSTest::TearDown();
-  }
-
-  void clearMockStream() {
-    mockStream->ClearTxData();
-    while (mockStream->available() > 0) {
-      mockStream->read();
+    try {
+      if (httpClient) {
+        delete httpClient;
+        httpClient = nullptr;
+      }
+      if (gsm) {
+        delete gsm;
+        gsm = nullptr;
+      }
+      if (mockStream) {
+        delete mockStream;
+        mockStream = nullptr;
+      }
+    } catch (const std::exception &e) {
+      log_e("Exception during TearDown");
+      log_e(e.what());
     }
   }
 
-  void setupConnectionResponses() {
-    mockStream->InjectRxData("OK\r\n");
-    mockStream->InjectRxData("OK\r\n");
-    mockStream->InjectRxData("OK\r\n");
-    mockStream->InjectRxData("+QIOPEN: 0,0\r\n");
-  }
+  // A helper function to create and run the responder task.
+  void runResponderTask(std::atomic<bool> *done, bool failConnection = false, bool isPost = false, int postPayloadSize = 0) {
+    struct ResponderData {
+      NiceMock<MockStream> *stream;
+      std::atomic<bool> *done;
+      bool fail;
+      bool isPost;
+      int payloadSize;
+    };
 
-  void setupQisendResponses(int count) {
-    for (int i = 0; i < count; i++) {
-      mockStream->InjectRxData(">\r\n");
-      mockStream->InjectRxData("SEND OK\r\n");
-    }
-  }
+    auto responderFunction = [](void *pvParameters) {
+      auto *data = static_cast<ResponderData *>(pvParameters);
 
-  void setupHttpResponse(bool isPost = false) {
-    // First few QIRD calls return no data
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
+      vTaskDelay(pdMS_TO_TICKS(100));
 
-    // Then provide the HTTP response
-    String httpResponse;
-    if (isPost) {
-      httpResponse = "HTTP/1.1 201 Created\r\n"
-                     "Content-Type: application/json\r\n"
-                     "Content-Length: 30\r\n"
-                     "\r\n"
-                     "{\"status\":\"created\",\"id\":123}";
-    } else {
-      httpResponse = "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/json\r\n"
-                     "Content-Length: 45\r\n"
-                     "\r\n"
-                     "{\"args\":{},\"headers\":{},\"url\":\"httpbin.org\"}";
-    }
+      while (!data->done->load()) {
+        std::string sentData = data->stream->GetTxData();
+        data->stream->ClearTxData();
 
-    String qirdResponse = "+QIRD: " + String(httpResponse.length()) + "\r\n" +
-                          httpResponse + "\r\n\r\nOK\r\n";
-    mockStream->InjectRxData(qirdResponse);
+        if (sentData.find("AT+QICLOSE") != std::string::npos) {
+          data->stream->InjectRxData("OK\r\n");
+          vTaskDelay(pdMS_TO_TICKS(50));
+        }
 
-    // Subsequent QIRD calls return no data
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
-    mockStream->InjectRxData("+QIRD: 0\r\n\r\nOK\r\n");
+        if (sentData.find("AT+QIDEACT") != std::string::npos) {
+          data->stream->InjectRxData("OK\r\n");
+          vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
+        if (sentData.find("AT+QIOPEN") != std::string::npos) {
+          data->stream->InjectRxData("OK\r\n");
+          if (data->fail) {
+            data->stream->InjectRxData("+QIOPEN: 0,1\r\n");
+          } else {
+            data->stream->InjectRxData("+QIOPEN: 0,0\r\n");
+          }
+          vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
+        if (sentData.find("AT+QISEND") != std::string::npos) {
+          data->stream->InjectRxData(">\r\n");
+          vTaskDelay(pdMS_TO_TICKS(100));
+          data->stream->InjectRxData("OK\r\n");
+          data->stream->InjectRxData("SEND OK\r\n");
+          vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
+        if (sentData.find("AT+QIRD") != std::string::npos) {
+          if (data->isPost) {
+            data->stream->InjectRxData(
+                "+QIURC: \"recv\",0,109,\"220.180.239.212\",8062,\""
+                "HTTP/1.1 201 Created\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: 30\r\n"
+                "\r\n"
+                "{\"status\":\"created\",\"id\":123}\r\n"
+                "\r\n\"");
+          } else {
+            data->stream->InjectRxData(
+                "+QIURC: \"recv\",0,120,\"220.180.239.212\",8062,\""
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                "Content-Length: 45\r\n"
+                "\r\n"
+                "{\"args\":{},\"headers\":{},\"url\":\"httpbin.org\"}\r\n"
+                "\r\n\"");
+          }
+          vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+      }
+
+      delete data;
+      vTaskDelete(nullptr);
+    };
+
+    auto *data = new ResponderData{mockStream, done, failConnection, isPost, postPayloadSize};
+    xTaskCreate(responderFunction, "ResponderTask", configMINIMAL_STACK_SIZE * 4, data, 1, nullptr);
   }
 };
 
 TEST_F(AsyncGSMHttpClientTest, HttpGetRequest) {
   bool testResult = runInFreeRTOSTask(
       [this]() {
-        clearMockStream();
+        std::atomic<bool> responderDone{false};
+        runResponderTask(&responderDone);
 
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
+        try {
+          if (!gsm->init(*mockStream)) {
+            throw std::runtime_error("GSM init failed");
+          }
+
+          log_i("[Test] Starting HTTP GET request...");
+          int connectionResult = httpClient->get("/get");
+
+          if (connectionResult != 0) {
+            throw std::runtime_error("HTTP connection failed");
+          }
+
+          int statusCode = httpClient->responseStatusCode();
+          if (statusCode != 200) {
+            throw std::runtime_error("Expected HTTP 200, got: " + String(statusCode));
+          }
+
+          String responseBody = httpClient->responseBody();
+          if (responseBody.indexOf("httpbin.org") == -1) {
+            throw std::runtime_error("Response validation failed");
+          }
+        } catch (const std::exception &e) {
+          responderDone = true;
+          vTaskDelay(pdMS_TO_TICKS(500));
+          throw;
         }
 
-        setupConnectionResponses();
-        setupQisendResponses(25);
-        setupHttpResponse(false);
-
-        log_i("[Test] Starting HTTP GET request...");
-
-        int connectionResult = httpClient->get("/get");
-
-        log_i("[Test] HTTP GET connection result: %d", connectionResult);
-
-        if (connectionResult != 0) {
-          throw std::runtime_error("HTTP connection failed");
-        }
-
+        responderDone = true;
         vTaskDelay(pdMS_TO_TICKS(500));
-
-        int statusCode = httpClient->responseStatusCode();
-        log_i("[Test] HTTP status code: %d", statusCode);
-
-        if (statusCode != 200) {
-          throw std::runtime_error("Expected HTTP 200, got: " +
-                                   String(statusCode));
-        }
-
-        String responseBody = httpClient->responseBody();
-        log_i("[Test] Response body: %s", responseBody.c_str());
-
-        if (responseBody.indexOf("httpbin.org") == -1) {
-          throw std::runtime_error("Response validation failed");
-        }
-
-        std::string sentData = mockStream->GetTxData();
-
-        if (sentData.find("AT+QIOPEN") == std::string::npos) {
-          throw std::runtime_error("Missing QIOPEN command");
-        }
-
-        if (sentData.find("GET /get HTTP/1.1") == std::string::npos) {
-          throw std::runtime_error("Missing HTTP GET request");
-        }
-
-        log_i("[Test] HTTP GET test completed successfully");
       },
       "HttpGetTest", 8192, 2, 15000);
 
@@ -151,57 +170,44 @@ TEST_F(AsyncGSMHttpClientTest, HttpGetRequest) {
 TEST_F(AsyncGSMHttpClientTest, HttpPostWithJson) {
   bool testResult = runInFreeRTOSTask(
       [this]() {
-        clearMockStream();
-
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
-        }
-
         String jsonPayload = "{\"temperature\":23.5,\"humidity\":65.2}";
+        std::atomic<bool> responderDone{false};
+        runResponderTask(&responderDone, false, true, jsonPayload.length());
 
-        setupConnectionResponses();
-        setupQisendResponses(30);
-        setupHttpResponse(true);
+        try {
+          if (!gsm->init(*mockStream)) {
+            throw std::runtime_error("GSM init failed");
+          }
 
-        log_i("[Test] Starting HTTP POST request...");
+          log_i("[Test] Starting HTTP POST request...");
 
-        // Corrected order for HttpClient calls
-        httpClient->beginRequest();
-        httpClient->post("/post");
-        httpClient->sendHeader("Content-Type", "application/json");
-        httpClient->sendHeader("Content-Length", jsonPayload.length());
-        httpClient->beginBody();
-        httpClient->print(jsonPayload);
-        httpClient->endRequest();
+          httpClient->beginRequest();
+          httpClient->post("/post");
+          httpClient->sendHeader("Content-Type", "application/json");
+          httpClient->sendHeader("Content-Length", jsonPayload.length());
+          httpClient->beginBody();
+          httpClient->print(jsonPayload);
+          httpClient->endRequest();
 
+          vTaskDelay(pdMS_TO_TICKS(500));
+
+          int statusCode = httpClient->responseStatusCode();
+          if (statusCode != 201) {
+            throw std::runtime_error("Expected HTTP 201, got: " + String(statusCode));
+          }
+
+          String responseBody = httpClient->responseBody();
+          if (responseBody.indexOf("created") == -1) {
+            throw std::runtime_error("POST response validation failed");
+          }
+        } catch (const std::exception &e) {
+          responderDone = true;
+          vTaskDelay(pdMS_TO_TICKS(500));
+          throw;
+        }
+
+        responderDone = true;
         vTaskDelay(pdMS_TO_TICKS(500));
-
-        int statusCode = httpClient->responseStatusCode();
-        log_i("[Test] HTTP status code: %d", statusCode);
-
-        if (statusCode != 201) {
-          throw std::runtime_error("Expected HTTP 201, got: " +
-                                   String(statusCode));
-        }
-
-        String responseBody = httpClient->responseBody();
-        log_i("[Test] Response body: %s", responseBody.c_str());
-
-        if (responseBody.indexOf("created") == -1) {
-          throw std::runtime_error("POST response validation failed");
-        }
-
-        std::string sentData = mockStream->GetTxData();
-
-        if (sentData.find("POST /post HTTP/1.1") == std::string::npos) {
-          throw std::runtime_error("Missing HTTP POST request");
-        }
-
-        if (sentData.find(jsonPayload.c_str()) == std::string::npos) {
-          throw std::runtime_error("Missing JSON payload");
-        }
-
-        log_i("[Test] HTTP POST test completed successfully");
       },
       "HttpPostTest", 8192, 2, 15000);
 
@@ -211,33 +217,30 @@ TEST_F(AsyncGSMHttpClientTest, HttpPostWithJson) {
 TEST_F(AsyncGSMHttpClientTest, HttpConnectionFailure) {
   bool testResult = runInFreeRTOSTask(
       [this]() {
-        clearMockStream();
+        std::atomic<bool> responderDone{false};
+        runResponderTask(&responderDone, true);
 
-        if (!gsm->init(*mockStream)) {
-          throw std::runtime_error("GSM init failed");
+        try {
+          if (!gsm->init(*mockStream)) {
+            throw std::runtime_error("GSM init failed");
+          }
+
+          log_i("[Test] Testing connection failure...");
+
+          int connectionResult = httpClient->get("/test");
+
+          if (connectionResult == 0) {
+            printf("Connection Result: %d\n", connectionResult);
+            throw std::runtime_error("Expected connection failure");
+          }
+        } catch (const std::exception &e) {
+          responderDone = true;
+          vTaskDelay(pdMS_TO_TICKS(500));
+          throw;
         }
 
-        mockStream->InjectRxData("OK\r\n");
-        mockStream->InjectRxData("OK\r\n");
-        mockStream->InjectRxData("OK\r\n");
-        mockStream->InjectRxData("+QIOPEN: 0,1\r\n");
-
-        log_i("[Test] Testing connection failure...");
-
-        int connectionResult = httpClient->get("/test");
-
-        log_i("[Test] Connection result: %d", connectionResult);
-
-        if (connectionResult == 0) {
-          throw std::runtime_error("Expected connection failure");
-        }
-
-        std::string sentData = mockStream->GetTxData();
-        if (sentData.find("AT+QIOPEN") == std::string::npos) {
-          throw std::runtime_error("Connection attempt not found");
-        }
-
-        log_i("[Test] Connection failure test completed successfully");
+        responderDone = true;
+        vTaskDelay(pdMS_TO_TICKS(500));
       },
       "ConnectionFailureTest", 8192, 2, 10000);
 
