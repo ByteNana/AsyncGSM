@@ -98,12 +98,21 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 void AsyncGSM::stop() {
   log_i("Stopping connection...");
   _connected = false;
-  if (!at.sendSync("AT+QICLOSE=0", 4000)) {
-    log_w("Failed to close connection");
+  ATPromise *promise = at.sendCommand("AT+QICLOSE=0");
+  if (!promise->wait()) {
+    at.popCompletedPromise(promise->getId());
+    log_e("Failed to close connection or already closed");
+    return;
   }
-  if (!at.sendSync("AT+QIDEACT=1", 4000)) {
-    log_w("PDP context deactivation failed or already inactive");
+  at.popCompletedPromise(promise->getId());
+  ATPromise *deactPromise = at.sendCommand("AT+QIDEACT=1");
+  if (!deactPromise->wait()) {
+    at.popCompletedPromise(deactPromise->getId());
+    log_e("Failed to deactivate PDP context or already inactive");
+    return;
   }
+  at.popCompletedPromise(deactPromise->getId());
+  log_i("Connection stopped.");
 }
 
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }
@@ -159,9 +168,6 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 }
 
 int AsyncGSM::available() {
-  if (modem.URCState.isConnected != 1) {
-    return -1;
-  }
   log_d("Checking available bytes in buffer...");
 #ifdef ON_UNIT_TESTS
   const char *cmd = "AT+QIRD\r\n";

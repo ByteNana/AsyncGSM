@@ -20,6 +20,7 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
   }
   if (trimmed.startsWith("+QIOPEN:")) {
+    log_d("URC: +QIOPEN received");
     int firstComma = trimmed.indexOf(',');
     if (firstComma != -1) {
       String resultStr = trimmed.substring(firstComma + 1);
@@ -31,7 +32,7 @@ void AsyncEG915U::handleURC(const String &urc) {
         URCState.isConnected = 1;
         log_i("URC: Connection opened successfully");
       } else {
-        URCState.isConnected = -1;
+        URCState.isConnected = 0;
         log_e("URC: Connection failed with error %d", result);
       }
     }
@@ -43,6 +44,7 @@ void AsyncEG915U::handleURC(const String &urc) {
   }
 
   if (trimmed.startsWith("+QIURC: \"recv\"")) {
+    rxBuffer->clear();
     // +QIURC: "recv"
     // Indicates that data has been received and is ready to be read with +QIRD
     log_i("URC: Data received, ready to read with +QIRD");
@@ -52,25 +54,42 @@ void AsyncEG915U::handleURC(const String &urc) {
   }
 
   if (trimmed.startsWith("+QIRD:")) {
+#ifdef ON_UNIT_TESTS
+    if (rxBuffer->length())
+      return;
+#endif
+    rxBuffer->clear();
     // +QIRD: <len>
     // Example: +QIRD: 728
 
     int headerStart = trimmed.indexOf(':') + 1;
+    if (headerStart == 0) {
+      log_e(">>>>>>>>>>>>URC: Failed to parse data length from +QIURC");
+      return;
+    }
     String header = trimmed.substring(headerStart);
     header.trim();
 
     int dataLen = header.toInt();
     if (dataLen <= 0) {
-      log_e("QIRD: Invalid length");
+      log_e(">>>>>>>>>>>QIRD: Invalid length");
       return;
     }
     log_d("QIRD: Data length = %d", dataLen);
 
-    rxBuffer->clear();
-    for (int i = 0; i < dataLen; i++) {
-      while (!at->getStream()->available()) {
-        delay(1);
-      }
+    // Find the start of the data itself.
+    int dataStart = urc.indexOf('\n');
+    if (dataStart == -1) {
+      log_e(">>>>>>>>>URC: Failed to find data in +QIURC");
+      return;
+    }
+
+    String data = urc.substring(dataStart + 1);
+    data.replace("\"", "");
+    (*rxBuffer) += data;
+
+    int toRead = dataLen - data.length() - 1;
+    for (int i = 0; i < toRead; i++) {
       char c = (char)at->getStream()->read();
       (*rxBuffer) += c;
     }
@@ -78,6 +97,11 @@ void AsyncEG915U::handleURC(const String &urc) {
     log_i("QIRD: Received %d bytes", rxBuffer->length());
     log_d("QIRD: Data content: %s", rxBuffer->c_str());
 
-    String okLine = at->getStream()->readStringUntil('\n');
+    String remaining;
+    for (int i = 0; i < 3; i++) {
+      char c = (char)at->getStream()->read();
+      remaining += c;
+    }
+    log_d("QIRD: Remaining data after read: %s", remaining.c_str());
   }
 }

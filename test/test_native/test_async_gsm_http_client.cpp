@@ -94,7 +94,7 @@ protected:
         if (sentData.find("AT+QIRD") != std::string::npos) {
           if (data->isPost) {
             data->stream->InjectRxData(
-                "+QIURC: \"recv\",0,109,\"220.180.239.212\",8062,\""
+                "+QIRD: 109\r\n"
                 "HTTP/1.1 201 Created\r\n"
                 "Content-Type: application/json\r\n"
                 "Content-Length: 30\r\n"
@@ -103,7 +103,7 @@ protected:
                 "\r\n\"");
           } else {
             data->stream->InjectRxData(
-                "+QIURC: \"recv\",0,120,\"220.180.239.212\",8062,\""
+                "+QIRD: 120\r\n"
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: application/json\r\n"
                 "Content-Length: 45\r\n"
