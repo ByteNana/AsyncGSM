@@ -303,14 +303,20 @@ bool AsyncEG915U::connect(const char *host, uint16_t port) {
   ATPromise *promise = at->sendCommand(String("AT+QIOPEN=1,0,\"TCP\",\"") +
                                        host + "\"," + portStr + ",0,0");
 
+  if(!promise->timeout(10000)->wait()) {
+    log_e("Failed to initiate connection");
+    at->popCompletedPromise(promise->getId());
+    return false;
+  }
+  at->popCompletedPromise(promise->getId());
+
   for (int i = 0; i < 20; i++) {
-    if (URCState.isConnected != 0) {
+    if (URCState.isConnected == 1) {
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 
-  at->popCompletedPromise(promise->getId());
 
   if (URCState.isConnected) {
     log_i("Connection URC received successfully");
