@@ -84,6 +84,7 @@ Integer type. The listening port of remote server
 ```
 
 ## Data Transmission Security
+
 1. Send data over SSL connection:
 
 ```
@@ -113,4 +114,3 @@ Integer type. Socket index. Range: 0–11.
 <length>
 Integer type. The length of received data. Range: 1–1500. Unit: byte.
 ```
-

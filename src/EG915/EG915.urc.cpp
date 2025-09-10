@@ -119,4 +119,34 @@ void AsyncEG915U::handleURC(const String &urc) {
     // No need for separate tail reading section anymore
     log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
   }
+
+  if (urc.startsWith("+QMTRECV:")) {
+    if (!mqttRxBuffer) {
+      log_w("URC: MQTT message received but mqttRxBuffer is not set");
+      return;
+    }
+    // +QMTRECV: <client>,<topic>,<payload_length><CR><LF><payload>
+    // Example: +QMTRECV: 0,"test/topic",13, "Hello, world!"
+    log_i("URC: MQTT message incoming... %s", urc.c_str());
+    mqttRxBuffer->clear();
+    while (at->getStream()->available()) {
+      int c = at->getStream()->read();
+      if (c >= 0) {
+        mqttRxBuffer->push_back(static_cast<uint8_t>(c));
+        // Simple heuristic to stop reading: if we see "\r\n" we assume end of
+        // message
+        if (mqttRxBuffer->size() >= 2) {
+          int len = mqttRxBuffer->size();
+          if (mqttRxBuffer->at(len - 2) == '\r' &&
+              mqttRxBuffer->at(len - 1) == '\n') {
+            break;
+          }
+        }
+      } else {
+        break;
+      }
+    }
+    log_i("URC: MQTT message received, length %d", (int)mqttRxBuffer->size());
+    URCState.hasMqttMessage.store(MqttSubsReceived::RECEIVED);
+  }
 }

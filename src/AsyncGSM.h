@@ -18,7 +18,7 @@ public:
 
   AsyncGSM();
   ~AsyncGSM();
-  bool init(Stream &stream);
+  virtual bool init(Stream &stream);
   bool begin(const char *apn = nullptr);
   int connect(IPAddress ip, uint16_t port) override;
   int connect(const char *host, uint16_t port) override;
@@ -30,7 +30,7 @@ public:
   int peek() override;
   void flush() override;
   void stop() override;
-  uint8_t connected() override;
+  virtual uint8_t connected() override;
   operator bool() override { return connected(); }
 
   // Information methods
@@ -42,6 +42,10 @@ public:
   // Connection management
   bool isConnected();
   bool gprsDisconnect();
+
+  // helpers
+  AsyncATHandler &getATHandler() { return at; }
+  AsyncEG915U &getModem() { return modem; }
 
 protected:
   bool ssl = false;

@@ -1,0 +1,35 @@
+#pragma once
+
+#include "EG915/EG915.h"
+
+using AsyncMqttGSMCallback =
+    std::function<void(char *, uint8_t *, unsigned int)>;
+
+class AsyncMqttGSM {
+private:
+  AsyncEG915U *modem = nullptr;
+  AsyncATHandler *at = nullptr;
+  std::deque<uint8_t> mqttRxBuffer;
+
+  AsyncMqttGSMCallback mqttCallback = nullptr;
+
+  const char *domain;
+  uint16_t port;
+  bool isConnected = false;
+
+public:
+  AsyncMqttGSM();
+  ~AsyncMqttGSM() = default;
+
+  bool init(AsyncEG915U &modem, AsyncATHandler &atHandler);
+
+  AsyncMqttGSM &setServer(const char *domain, uint16_t port);
+  uint8_t connected();
+  bool connect(const char *id, const char *user, const char *pass);
+  bool publish(const char *topic, const uint8_t *payload, unsigned int plength);
+  bool subscribe(const char *topic);
+  bool subscribe(const char *topic, uint8_t qos);
+  bool unsubscribe(const char *topic);
+  AsyncMqttGSM &setCallback(AsyncMqttGSMCallback callback);
+  void loop();
+};

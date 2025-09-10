@@ -16,6 +16,7 @@ private:
 
 public:
   UrcState URCState;
+  std::deque<uint8_t> *mqttRxBuffer = nullptr;
 
   AsyncEG915U();
   ~AsyncEG915U();

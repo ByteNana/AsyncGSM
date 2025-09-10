@@ -18,7 +18,13 @@ enum class ConnectionStatus {
   CONNECTED,
 };
 
+enum class MqttSubsReceived {
+  IDLE,
+  RECEIVED,
+};
+
 struct UrcState {
   std::atomic<RegStatus> creg{RegStatus::REG_NO_RESULT};
   std::atomic<ConnectionStatus> isConnected{ConnectionStatus::DISCONNECTED};
+  std::atomic<MqttSubsReceived> hasMqttMessage{MqttSubsReceived::IDLE};
 };
