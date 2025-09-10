@@ -27,18 +27,23 @@ public:
   bool checkModemModel();
   bool checkTimezone();
   bool checkSIMReady();
-  void disablePDPContext();
   bool disalbeSleepMode();
-  bool checkGPRSSAttached();
   bool gprsConnect(const char *apn, const char *user = nullptr,
                    const char *pass = nullptr);
   bool gprsDisconnect();
-  bool checkPDPContext();
-  bool attachGPRS();
   String getSimCCID();
   String getIMEI();
   String getOperator();
   String getIPAddress();
   bool connect(const char *host, uint16_t port);
   bool connectSecure(const char *host, uint16_t port);
+
+  // Helpers for GPRS connection
+  void disableConnections();
+  bool setPDPContext(const char *apn);
+  bool activatePDPContext();
+  bool isGPRSSAttached();
+  bool checkNetworkContext();
+  bool activatePDP();
+  bool attachGPRS();
 };

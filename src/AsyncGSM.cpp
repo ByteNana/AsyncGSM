@@ -67,7 +67,7 @@ bool AsyncGSM::begin(const char *apn) {
   }
 
   // Deactivate all contexts just in case
-  modem.disablePDPContext();
+  modem.disableConnections();
 
   modem.disalbeSleepMode();
 
@@ -76,7 +76,7 @@ bool AsyncGSM::begin(const char *apn) {
   }
 
   for (int i = 0; i < 10; ++i) {
-    if (modem.checkGPRSSAttached()) {
+    if (modem.isGPRSSAttached() && modem.checkNetworkContext()) {
       log_i("GPRS is attached.");
       return true;
     }

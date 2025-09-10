@@ -21,7 +21,7 @@ bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
 
 bool AsyncEG915U::setEchoOff() {
   ATPromise *promise = at->sendCommand("ATE0");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to disable echo");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -32,7 +32,7 @@ bool AsyncEG915U::setEchoOff() {
 
 bool AsyncEG915U::enableVerboseErrors() {
   ATPromise *promise = at->sendCommand("AT+CMEE=2");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to enable verbose errors");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -44,7 +44,7 @@ bool AsyncEG915U::enableVerboseErrors() {
 bool AsyncEG915U::checkModemModel() {
 
   ATPromise *cgmm = at->sendCommand("AT+CGMM");
-  if (!cgmm->wait()) {
+  if (!cgmm->wait() || !cgmm->getResponse()->isSuccess()) {
     log_e("Failed to get modem model");
     at->popCompletedPromise(cgmm->getId());
     return false;
@@ -60,7 +60,7 @@ bool AsyncEG915U::checkModemModel() {
   at->popCompletedPromise(cgmmResp->getId());
 
   ATPromise *cgmi = at->sendCommand("AT+CGMI");
-  if (!cgmi->wait()) {
+  if (!cgmi->wait() || !cgmi->getResponse()->isSuccess()) {
     log_e("Failed to get modem manufacturer");
     at->popCompletedPromise(cgmi->getId());
     return false;
@@ -77,7 +77,7 @@ bool AsyncEG915U::checkModemModel() {
 
 bool AsyncEG915U::checkTimezone() {
   ATPromise *promise = at->sendCommand("AT+CTZU=1");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to set time zone update");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -103,7 +103,7 @@ bool AsyncEG915U::checkSIMReady() {
   return true;
 }
 
-void AsyncEG915U::disablePDPContext() {
+void AsyncEG915U::disableConnections() {
   for (int i = 0; i < 4; i++) {
     ATPromise *promise = at->sendCommand(String("AT+QICLOSE=") + String(i));
     promise->wait();
@@ -113,7 +113,7 @@ void AsyncEG915U::disablePDPContext() {
 
 bool AsyncEG915U::disalbeSleepMode() {
   ATPromise *promise = at->sendCommand("AT+QSCLK=0");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to disable sleep mode");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -122,21 +122,20 @@ bool AsyncEG915U::disalbeSleepMode() {
   return true;
 }
 
-bool AsyncEG915U::checkGPRSSAttached() {
-  ATPromise *promise = at->sendCommand("AT+CGATT?");
-  if (!promise->expect("+CGATT: 1")->wait()) {
-    log_e("Failed to get GPRS attach status");
+bool AsyncEG915U::checkNetworkContext() {
+  // Check if the PDP context is active
+  ATPromise *promise = at->sendCommand("AT+QIACT?");
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
+    log_e("PDP context is not active");
     at->popCompletedPromise(promise->getId());
     return false;
   }
   at->popCompletedPromise(promise->getId());
-  return true;
-}
 
-bool AsyncEG915U::checkPDPContext() {
-  ATPromise *promise = at->sendCommand("AT+QIACT?");
-  if (!promise->expect("+QIACT: 1,1")->wait()) {
-    log_e("PDP context is not active");
+  promise = at->sendCommand("");
+  if (!promise->expect("+QIACT: 1,1")->timeout(20000)->wait() ||
+      !promise->getResponse()->isSuccess()) {
+    log_e("Failed to get prompt for MQTT payload");
     at->popCompletedPromise(promise->getId());
     return false;
   }
@@ -147,39 +146,43 @@ bool AsyncEG915U::checkPDPContext() {
 bool AsyncEG915U::gprsConnect(const char *apn, const char *user,
                               const char *pass) {
   gprsDisconnect();
+  setPDPContext(apn);
   String cmd = String("AT+QICSGP=1,1,\"") + apn + "\",\"" + (user ? user : "") +
                "\",\"" + (pass ? pass : "") + "\",1";
   ATPromise *promise = at->sendCommand(cmd);
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to set APN");
     at->popCompletedPromise(promise->getId());
     return false;
   }
   at->popCompletedPromise(promise->getId());
 
+  log_i("PDP context activated successfully");
+  if (!isGPRSSAttached()) {
+    log_e("GPRS is not attached after PDP context activation");
+    return false;
+  }
+  log_i("GPRS is attached");
   promise = at->sendCommand("AT+QIACT=1");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to activate PDP context");
     at->popCompletedPromise(promise->getId());
     return false;
   }
   at->popCompletedPromise(promise->getId());
 
-  if (!checkPDPContext()) {
+  activatePDP();
+
+  if (!checkNetworkContext()) {
     return false;
   }
-  log_i("PDP context activated successfully");
-  if (!checkGPRSSAttached()) {
-    log_e("GPRS is not attached after PDP context activation");
-    return false;
-  }
-  log_i("GPRS is attached");
+
   return true;
 }
 
 bool AsyncEG915U::gprsDisconnect() {
   ATPromise *promise = at->sendCommand("AT+QIDEACT=1");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to deactivate PDP context");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -190,10 +193,10 @@ bool AsyncEG915U::gprsDisconnect() {
 
 bool AsyncEG915U::attachGPRS() {
   log_i("Attaching GPRS...");
-  if (!checkGPRSSAttached()) {
+  if (!isGPRSSAttached()) {
     log_i("GPRS is not attached, trying to attach...");
     ATPromise *promise = at->sendCommand("AT+CGATT=1");
-    if (!promise->wait()) {
+    if (!promise->wait() || !promise->getResponse()->isSuccess()) {
       log_e("Failed to attach GPRS");
       at->popCompletedPromise(promise->getId());
       return false;
@@ -205,7 +208,7 @@ bool AsyncEG915U::attachGPRS() {
 
 String AsyncEG915U::getSimCCID() {
   ATPromise *promise = at->sendCommand("AT+CCID");
-  if (!promise->expect("+QCCID:")->wait()) {
+  if (!promise->expect("+QCCID:")->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to get SIM CCID");
     at->popCompletedPromise(promise->getId());
     return "";
@@ -226,7 +229,7 @@ String AsyncEG915U::getSimCCID() {
 
 String AsyncEG915U::getIMEI() {
   ATPromise *promise = at->sendCommand("AT+CGSN");
-  if (!promise->wait()) {
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to get IMEI");
     at->popCompletedPromise(promise->getId());
     return "";
@@ -247,7 +250,7 @@ String AsyncEG915U::getIMEI() {
 
 String AsyncEG915U::getOperator() {
   ATPromise *promise = at->sendCommand("AT+COPS?");
-  if (!promise->expect("+COPS:")->wait()) {
+  if (!promise->expect("+COPS:")->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to get operator");
     at->popCompletedPromise(promise->getId());
     return "";
@@ -273,7 +276,7 @@ String AsyncEG915U::getOperator() {
 
 String AsyncEG915U::getIPAddress() {
   ATPromise *promise = at->sendCommand("AT+QIACT?");
-  if (!promise->expect("+QIACT:")->wait()) {
+  if (!promise->expect("+QIACT:")->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to get IP address");
     at->popCompletedPromise(promise->getId());
     return "";
