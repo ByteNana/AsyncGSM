@@ -17,6 +17,49 @@ bool AsyncMqttGSM::init(AsyncEG915U &modem, AsyncATHandler &atHandler) {
   }
   at->popCompletedPromise(mqttPromise->getId());
 
+  mqttPromise = at->sendCommand("AT+QMTCFG=\"version\",0,4");
+  if (!mqttPromise->wait()) {
+    log_e("Failed to set MQTT version");
+    at->popCompletedPromise(mqttPromise->getId());
+    return false;
+  }
+  at->popCompletedPromise(mqttPromise->getId());
+
+  // Set PDP context ID to 1
+  mqttPromise = at->sendCommand("AT+QMTCFG=\"pdpcid\",0,1");
+  if (!mqttPromise->wait()) {
+    log_e("Failed to set PDP context ID");
+    at->popCompletedPromise(mqttPromise->getId());
+    return false;
+  }
+  at->popCompletedPromise(mqttPromise->getId());
+
+  // Set keepalive to 60 seconds
+  mqttPromise = at->sendCommand("AT+QMTCFG=\"keepalive\",0,60");
+  if (!mqttPromise->wait()) {
+    log_e("Failed to set keepalive");
+    at->popCompletedPromise(mqttPromise->getId());
+    return false;
+  }
+  at->popCompletedPromise(mqttPromise->getId());
+
+  // Set clean session to 1 (true)
+  mqttPromise = at->sendCommand("AT+QMTCFG=\"session\",0,1");
+  if (!mqttPromise->wait()) {
+    log_e("Failed to set session");
+    at->popCompletedPromise(mqttPromise->getId());
+    return false;
+  }
+  at->popCompletedPromise(mqttPromise->getId());
+
+  // Set command timeout to 5 seconds, 3 retries, no exponential backoff
+  mqttPromise = at->sendCommand("AT+QMTCFG=\"timeout\",0,5,3,0");
+  if (!mqttPromise->wait()) {
+    log_e("Failed to set timeout");
+    at->popCompletedPromise(mqttPromise->getId());
+    return false;
+  }
+  at->popCompletedPromise(mqttPromise->getId());
   return true;
 }
 
