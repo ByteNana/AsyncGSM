@@ -19,7 +19,8 @@ public:
 
   AsyncEG915U();
   ~AsyncEG915U();
-  bool init(Stream &stream, AsyncATHandler &atHandler, std::deque<uint8_t> &rxBuf);
+  bool init(Stream &stream, AsyncATHandler &atHandler,
+            std::deque<uint8_t> &rxBuf);
   bool setEchoOff();
   bool enableVerboseErrors();
   bool checkModemModel();
@@ -38,4 +39,5 @@ public:
   String getOperator();
   String getIPAddress();
   bool connect(const char *host, uint16_t port);
+  bool connectSecure(const char *host, uint16_t port);
 };

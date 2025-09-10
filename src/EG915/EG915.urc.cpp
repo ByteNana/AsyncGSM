@@ -19,7 +19,7 @@ void AsyncEG915U::handleURC(const String &urc) {
       log_i("URC: Registration status updated to %d", URCState.creg.load());
     }
   }
-  if (trimmed.startsWith("+QIOPEN:")) {
+  if (trimmed.startsWith("+QIOPEN:") || trimmed.startsWith("+QSSLOPEN:")) {
     log_d("URC: +QIOPEN received");
     rxBuffer->clear();
     int firstComma = trimmed.indexOf(',');
@@ -50,6 +50,16 @@ void AsyncEG915U::handleURC(const String &urc) {
     log_i("URC: Data received, ready to read with +QIRD");
     // Ask modem to read pending data for socket 0
     at->getStream()->print("AT+QIRD=0\r\n");
+    at->getStream()->flush();
+  }
+
+  if (trimmed.startsWith("+QSSLURC: \"recv\"")) {
+    // +QSSLURC: "recv"
+    // Indicates that data has been received and is ready to be read with
+    // +QSSLRECV
+    log_i("URC: SSL Data received, ready to read with +QIRD");
+    // Ask modem to read pending data for socket 0
+    at->getStream()->print("AT+QSSLRECV=0, 1500\r\n");
     at->getStream()->flush();
   }
 
@@ -85,13 +95,15 @@ void AsyncEG915U::handleURC(const String &urc) {
         // Yield a tick and enforce a simple timeout to avoid stalling forever
         vTaskDelay(pdMS_TO_TICKS(1));
         if (millis() - lastByteTs > 5000) {
-          log_w("QIRD: Timed out while reading payload, %d bytes remain", remaining);
+          log_w("QIRD: Timed out while reading payload, %d bytes remain",
+                remaining);
           break;
         }
       }
     }
 
-    // Discard trailing "\r\nOK\r\n" coming from AT+QIRD to avoid polluting the TCP stream
+    // Discard trailing "\r\nOK\r\n" coming from AT+QIRD to avoid polluting the
+    // TCP stream
     String tail;
     unsigned long tailStart = millis();
     while (millis() - tailStart < 50) {

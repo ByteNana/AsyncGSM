@@ -135,14 +135,16 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   }
   log_d("Sent bytes: %s", out.c_str());
 
-  ATPromise *promise = at.sendCommand(String("AT+QISEND=0,") + String(size));
+  String command = ssl ? "AT+QSSLSEND=0," : "AT+QISEND=0,";
+
+  ATPromise *promise = at.sendCommand(command + String(size));
   if (!promise) {
     log_e("Failed to create promise for AT+QISEND");
     at.popCompletedPromise(promise->getId());
     return 0;
   }
 
-  while(!at.getStream()->available()) {
+  while (!at.getStream()->available()) {
     vTaskDelay(0);
   }
   String response;
