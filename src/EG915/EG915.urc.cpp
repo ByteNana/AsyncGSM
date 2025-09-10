@@ -48,8 +48,8 @@ void AsyncEG915U::handleURC(const String &urc) {
     // +QIURC: "recv"
     // Indicates that data has been received and is ready to be read with +QIRD
     log_i("URC: Data received, ready to read with +QIRD");
-    at->getStream()->print("AT+QIRD=0");
-    at->getStream()->print("\r\n");
+    // Ask modem to read pending data for socket 0
+    at->getStream()->print("AT+QIRD=0\r\n");
     at->getStream()->flush();
   }
 
@@ -64,32 +64,52 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
     String header = urc.substring(headerStart + 1);
 
-    int dataLen = header.toInt();
-    if (dataLen <= 0) {
+    int remaining = header.toInt();
+    if (remaining <= 0) {
       log_e(">>>>>>>>>>>QIRD: Invalid length");
       return;
     }
-    log_d("QIRD: Data length = %d", dataLen);
+    log_d("QIRD: Data length = %d", remaining);
 
-    while (at->getStream()->available()) {
-      char c = at->getStream()->read();
-      if (dataLen >= 0) {
-        rxBuffer->push_back(c);
+    // Pull exactly <remaining> bytes from the stream into the TCP rx buffer
+    unsigned long lastByteTs = millis();
+    while (remaining > 0) {
+      if (at->getStream()->available()) {
+        int c = at->getStream()->read();
+        if (c >= 0) {
+          rxBuffer->push_back(static_cast<uint8_t>(c));
+          remaining--;
+          lastByteTs = millis();
+        }
       } else {
-        printf("QIRD: Extra byte received: %c\n", c);
+        // Yield a tick and enforce a simple timeout to avoid stalling forever
+        vTaskDelay(pdMS_TO_TICKS(1));
+        if (millis() - lastByteTs > 5000) {
+          log_w("QIRD: Timed out while reading payload, %d bytes remain", remaining);
+          break;
+        }
       }
-      dataLen--;
     }
 
-    log_i("QIRD: Received %d bytes", (int)rxBuffer->size());
-    for (uint8_t b : *rxBuffer) {
-      printf("%c", b);
+    // Discard trailing "\r\nOK\r\n" coming from AT+QIRD to avoid polluting the TCP stream
+    String tail;
+    unsigned long tailStart = millis();
+    while (millis() - tailStart < 50) {
+      if (!at->getStream()->available()) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+        continue;
+      }
+      char c = at->getStream()->read();
+      tail += c;
+      if (tail.endsWith("\r\nOK\r\n")) {
+        break;
+      }
+      // Prevent tail string from growing without bound
+      if (tail.length() > 8) {
+        tail.remove(0, tail.length() - 8);
+      }
     }
-    printf("\n");
-    if (rxBuffer->size() < dataLen) {
-      at->getStream()->print("AT+QIRD=0");
-      at->getStream()->print("\r\n");
-      at->getStream()->flush();
-    }
+
+    log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
   }
 }
