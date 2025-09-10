@@ -39,6 +39,7 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
   // }
 
   // Open ssl connection
+  URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
   sslPromise = at->sendCommand(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," +
                                String(port) + ",0");
   if (!sslPromise->wait()) {
@@ -48,6 +49,19 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
   }
   at->popCompletedPromise(sslPromise->getId());
 
-  // Now proceed to connect
-  return connect(host, port);
+  for (int i = 0; i < 20; i++) {
+    ConnectionStatus status = URCState.isConnected.load();
+    if (status == ConnectionStatus::CONNECTED ||
+        status == ConnectionStatus::FAILED) {
+      break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+
+  if (URCState.isConnected.load() == ConnectionStatus::CONNECTED) {
+    log_i("Connection URC received successfully");
+  } else {
+    log_e("No +QIOPEN URC received or it indicated failure");
+  }
+  return URCState.isConnected.load() == ConnectionStatus::CONNECTED;
 }

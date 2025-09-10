@@ -46,7 +46,7 @@ public:
 protected:
   bool ssl = false;
 
-  bool modemConnect(const char *host, uint16_t port);
+  virtual bool modemConnect(const char *host, uint16_t port);
   int8_t getRegistrationStatusXREG(const char *regCommand);
   RegStatus getRegistrationStatus();
 
