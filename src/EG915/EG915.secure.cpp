@@ -19,9 +19,10 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
     return false;
   }
 
-  // Set security level to 1 (no client verification)
+  // Set security level to 0 (Insecure for now)
+  // TODO: Change to 1 after implementing certificate handling
   at->popCompletedPromise(sslPromise->getId());
-  sslPromise = at->sendCommand("AT+QSSLCFG=\"seclevel\",1,1");
+  sslPromise = at->sendCommand("AT+QSSLCFG=\"seclevel\",1,0");
   if (!sslPromise->wait()) {
     log_e("Failed to set SSL security level");
     at->popCompletedPromise(sslPromise->getId());

@@ -39,7 +39,8 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
   }
 
-  if (trimmed.startsWith("+QICLOSE:")) {
+  if (trimmed.startsWith("+QICLOSE:") ||
+      trimmed.startsWith("+QSSLURC: \"closed\"")) {
     URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
     log_i("URC: Connection closed");
   }
@@ -63,33 +64,47 @@ void AsyncEG915U::handleURC(const String &urc) {
     at->getStream()->flush();
   }
 
-  if (trimmed.startsWith("+QIRD:")) {
+  if (trimmed.startsWith("+QIRD:") || trimmed.startsWith("+QSSLRECV:")) {
     // +QIRD: <len>
     // Example: +QIRD: 728
-
     int headerStart = urc.indexOf(':');
     if (headerStart == -1) {
       log_e(">>>>>>>>>>>>URC: Failed to parse data length from +QIURC");
       return;
     }
     String header = urc.substring(headerStart + 1);
-
     int remaining = header.toInt();
     if (remaining <= 0) {
       log_e(">>>>>>>>>>>QIRD: Invalid length");
       return;
     }
     log_d("QIRD: Data length = %d", remaining);
-
     // Pull exactly <remaining> bytes from the stream into the TCP rx buffer
     unsigned long lastByteTs = millis();
+    String tail; // Move tail tracking to main loop
     while (remaining > 0) {
       if (at->getStream()->available()) {
         int c = at->getStream()->read();
         if (c >= 0) {
-          rxBuffer->push_back(static_cast<uint8_t>(c));
+          uint8_t byte = static_cast<uint8_t>(c);
+          rxBuffer->push_back(byte);
           remaining--;
           lastByteTs = millis();
+
+          // Check for terminator
+          tail += (char)byte;
+          if (tail.endsWith("\r\nOK\r\n")) {
+            // Remove the terminator from rxBuffer
+            for (int i = 0; i < 6; i++) { // "\r\nOK\r\n" is 6 bytes
+              if (!rxBuffer->empty())
+                rxBuffer->pop_back();
+            }
+            break;
+          }
+          // Prevent tail string from growing without bound
+          if (tail.length() > 8) {
+            tail.remove(0, tail.length() - 8);
+          }
         }
       } else {
         // Yield a tick and enforce a simple timeout to avoid stalling forever
@@ -101,27 +116,7 @@ void AsyncEG915U::handleURC(const String &urc) {
         }
       }
     }
-
-    // Discard trailing "\r\nOK\r\n" coming from AT+QIRD to avoid polluting the
-    // TCP stream
-    String tail;
-    unsigned long tailStart = millis();
-    while (millis() - tailStart < 50) {
-      if (!at->getStream()->available()) {
-        vTaskDelay(pdMS_TO_TICKS(1));
-        continue;
-      }
-      char c = at->getStream()->read();
-      tail += c;
-      if (tail.endsWith("\r\nOK\r\n")) {
-        break;
-      }
-      // Prevent tail string from growing without bound
-      if (tail.length() > 8) {
-        tail.remove(0, tail.length() - 8);
-      }
-    }
-
+    // No need for separate tail reading section anymore
     log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
   }
 }

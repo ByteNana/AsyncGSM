@@ -183,7 +183,8 @@ int AsyncGSM::available() {
 }
 
 int AsyncGSM::read() {
-  log_d("read() called...");
+  // Avoid logs here.
+  // log_d("read() called...");
   char c = rxBuffer.front();
   rxBuffer.pop_front();
   return c;
