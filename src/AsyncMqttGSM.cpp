@@ -121,7 +121,8 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user,
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
                            unsigned int plength) {
   // Client: 0, msgId: 1, qos: 1, retain: 0
-  String cmd = String("AT+QMTPUBEX=0,1,1,0,\"") + topic + "\"," + String(plength);
+  String cmd =
+      String("AT+QMTPUBEX=0,1,1,0,\"") + topic + "\"," + String(plength);
   ATPromise *mqttPromise = at->sendCommand(cmd);
   if (!mqttPromise->expect(">")->wait()) {
     log_e("Failed to publish MQTT topic");
@@ -222,7 +223,7 @@ void AsyncMqttGSM::loop() {
 
   // Extract topic and payload length directly
   std::string topic = std::string(mqttRxBuffer.begin() + commaPositions[0] + 1,
-                             mqttRxBuffer.begin() + commaPositions[1]);
+                                  mqttRxBuffer.begin() + commaPositions[1]);
 
   std::string lengthStr(mqttRxBuffer.begin() + commaPositions[1] + 1,
                         mqttRxBuffer.end());

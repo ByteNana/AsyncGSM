@@ -125,7 +125,8 @@ bool AsyncEG915U::disalbeSleepMode() {
 bool AsyncEG915U::checkNetworkContext() {
   // Check if the PDP context is active
   ATPromise *promise = at->sendCommand("AT+QIACT?");
-  if (!promise->wait() || !promise->getResponse()->containsResponse("+QIACT: 1,1")) {
+  if (!promise->wait() ||
+      !promise->getResponse()->containsResponse("+QIACT: 1,1")) {
     log_e("PDP context is not active");
     at->popCompletedPromise(promise->getId());
     return false;
