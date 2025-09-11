@@ -125,17 +125,8 @@ bool AsyncEG915U::disalbeSleepMode() {
 bool AsyncEG915U::checkNetworkContext() {
   // Check if the PDP context is active
   ATPromise *promise = at->sendCommand("AT+QIACT?");
-  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
+  if (!promise->wait() || !promise->getResponse()->containsResponse("+QIACT: 1, 1")) {
     log_e("PDP context is not active");
-    at->popCompletedPromise(promise->getId());
-    return false;
-  }
-  at->popCompletedPromise(promise->getId());
-
-  promise = at->sendCommand("");
-  if (!promise->expect("+QIACT: 1,1")->timeout(20000)->wait() ||
-      !promise->getResponse()->isSuccess()) {
-    log_e("Failed to get prompt for MQTT payload");
     at->popCompletedPromise(promise->getId());
     return false;
   }
@@ -208,7 +199,8 @@ bool AsyncEG915U::attachGPRS() {
 
 String AsyncEG915U::getSimCCID() {
   ATPromise *promise = at->sendCommand("AT+CCID");
-  if (!promise->expect("+QCCID:")->wait() || !promise->getResponse()->isSuccess()) {
+  if (!promise->expect("+QCCID:")->wait() ||
+      !promise->getResponse()->isSuccess()) {
     log_e("Failed to get SIM CCID");
     at->popCompletedPromise(promise->getId());
     return "";
@@ -250,7 +242,8 @@ String AsyncEG915U::getIMEI() {
 
 String AsyncEG915U::getOperator() {
   ATPromise *promise = at->sendCommand("AT+COPS?");
-  if (!promise->expect("+COPS:")->wait() || !promise->getResponse()->isSuccess()) {
+  if (!promise->expect("+COPS:")->wait() ||
+      !promise->getResponse()->isSuccess()) {
     log_e("Failed to get operator");
     at->popCompletedPromise(promise->getId());
     return "";
@@ -276,7 +269,8 @@ String AsyncEG915U::getOperator() {
 
 String AsyncEG915U::getIPAddress() {
   ATPromise *promise = at->sendCommand("AT+QIACT?");
-  if (!promise->expect("+QIACT:")->wait() || !promise->getResponse()->isSuccess()) {
+  if (!promise->expect("+QIACT:")->wait() ||
+      !promise->getResponse()->isSuccess()) {
     log_e("Failed to get IP address");
     at->popCompletedPromise(promise->getId());
     return "";

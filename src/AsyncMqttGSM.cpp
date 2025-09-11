@@ -120,23 +120,23 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user,
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
                            unsigned int plength) {
   // Client: 0, msgId: 0, qos: 0, retain: 0
-  String cmd = String("AT+QMTPUB=0,0,0,0,\"") + topic + "\"," + String(plength);
+  String cmd = String("AT+QMTPUBEX=0,0,0,0,\"") + topic + "\"," + String(plength);
   ATPromise *mqttPromise = at->sendCommand(cmd);
-  if (!mqttPromise->wait()) {
+  if (!mqttPromise->expect(">")->wait()) {
     log_e("Failed to publish MQTT topic");
     at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
   at->popCompletedPromise(mqttPromise->getId());
 
-  // Wait for '>' prompt
-  mqttPromise = at->sendCommand("");
-  if (!mqttPromise->expect(">")->wait()) {
-    log_e("Failed to get prompt for MQTT payload");
-    at->popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  at->popCompletedPromise(mqttPromise->getId());
+  // // Wait for '>' prompt
+  // mqttPromise = at->sendCommand("");
+  // if (!mqttPromise->expect(">")->wait()) {
+  //   log_e("Failed to get prompt for MQTT payload");
+  //   at->popCompletedPromise(mqttPromise->getId());
+  //   return false;
+  // }
+  // at->popCompletedPromise(mqttPromise->getId());
 
   // Send payload
   String payloadStr;
@@ -160,42 +160,24 @@ bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
   String cmd = String("AT+QMTSUB=0,1,\"") + topic + "\"," + String(qos);
   ATPromise *mqttPromise = at->sendCommand(cmd);
-  if (!mqttPromise->wait()) {
+  if (!mqttPromise->wait() || !mqttPromise->getResponse()->containsResponse("QMTSUB: 0,1,0")) {
     log_e("Failed to subscribe MQTT topic");
     at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
   at->popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = at->sendCommand("");
-  if (!mqttPromise->expect("QMTSUB: 0,1,0")->wait()) {
-    log_e("Failed to get subscribe confirmation");
-    at->popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  at->popCompletedPromise(mqttPromise->getId());
-
   return true;
 }
 
 bool AsyncMqttGSM::unsubscribe(const char *topic) {
   String cmd = String("AT+QMTUNSUB=0,1,\"") + topic + "\"";
   ATPromise *mqttPromise = at->sendCommand(cmd);
-  if (!mqttPromise->wait()) {
+  if (!mqttPromise->wait() || !mqttPromise->getResponse()->containsResponse("QMTUNSUB: 0,1,0")) {
     log_e("Failed to unsubscribe MQTT topic");
     at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
   at->popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = at->sendCommand("");
-  if (!mqttPromise->expect("QMTUNSUB: 0,1,0")->wait()) {
-    log_e("Failed to get unsubscribe confirmation");
-    at->popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  at->popCompletedPromise(mqttPromise->getId());
-
   return true;
 }
 

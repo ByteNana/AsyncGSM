@@ -21,8 +21,7 @@ bool AsyncEG915U::setPDPContext(const char *apn) {
 
 bool AsyncEG915U::isGPRSSAttached() {
   ATPromise *promise = at->sendCommand("AT+CGATT?");
-  promise->expect("+CGATT: 1");
-  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
+  if (!promise->wait() || !promise->getResponse()->containsResponse("+CGATT: 1")) {
     log_e("Failed to get GPRS attach status");
     at->popCompletedPromise(promise->getId());
     return false;
