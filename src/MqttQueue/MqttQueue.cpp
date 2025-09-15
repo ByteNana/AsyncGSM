@@ -3,7 +3,7 @@
 #include <memory>
 
 AtomicMqttQueue::AtomicMqttQueue() {
-  messageQueue = xQueueCreate(10, sizeof(MqttMessagePtr));
+  messageQueue = xQueueCreate(10, sizeof(MqttMessage *));
   if (messageQueue == NULL) {
     log_e("Failed to create message queue - CRITICAL");
   }
@@ -11,8 +11,9 @@ AtomicMqttQueue::AtomicMqttQueue() {
 
 AtomicMqttQueue::~AtomicMqttQueue() {
   if (messageQueue != NULL) {
-    MqttMessagePtr msg;
-    while (xQueueReceive(messageQueue, &msg, 0) == pdTRUE) {
+    MqttMessage *raw = nullptr;
+    while (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
+      std::unique_ptr<MqttMessage> uptr(raw);
     }
     hasMessage.store(false);
     vQueueDelete(messageQueue);
@@ -20,23 +21,22 @@ AtomicMqttQueue::~AtomicMqttQueue() {
 }
 
 bool AtomicMqttQueue::push(const MqttMessage &msg, TickType_t timeout) {
-  auto sp = new MqttMessagePtr(std::make_shared<MqttMessage>(msg));
-  if (xQueueSend(messageQueue, &sp, timeout) == pdTRUE) {
+  auto ptr = std::make_unique<MqttMessage>(msg);
+  MqttMessage *raw = ptr.get();
+  if (xQueueSend(messageQueue, &raw, timeout) == pdTRUE) {
+    auto a = ptr.release();
     hasMessage.store(true);
     return true;
   }
-  delete sp;
   log_w("Message queue full, dropping MQTT message");
   return false;
 }
 
 bool AtomicMqttQueue::pop(MqttMessage &msg) {
-  MqttMessagePtr *sptr = nullptr;
-  if (xQueueReceive(messageQueue, &sptr, 0) == pdTRUE && sptr) {
-    if (*sptr) {
-      msg = *(*sptr);
-    }
-    delete sptr;
+  MqttMessage *raw = nullptr;
+  if (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
+    std::unique_ptr<MqttMessage> uptr(raw);
+    msg = *uptr;
     if (uxQueueMessagesWaiting(messageQueue) == 0) {
       hasMessage.store(false);
     }
@@ -51,8 +51,9 @@ size_t AtomicMqttQueue::size() { return uxQueueMessagesWaiting(messageQueue); }
 
 void AtomicMqttQueue::clear() {
   if (messageQueue != NULL) {
-    MqttMessagePtr ptr;
-    while (xQueueReceive(messageQueue, &ptr, 0) == pdTRUE) {
+    MqttMessage *raw = nullptr;
+    while (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
+      std::unique_ptr<MqttMessage> uptr(raw);
     }
   }
   hasMessage.store(false);
