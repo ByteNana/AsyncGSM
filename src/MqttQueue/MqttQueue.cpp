@@ -2,8 +2,6 @@
 #include "esp_log.h"
 #include <memory>
 
-using MqttMessagePtr = std::shared_ptr<MqttMessage>;
-
 AtomicMqttQueue::AtomicMqttQueue() {
   messageQueue = xQueueCreate(10, sizeof(MqttMessagePtr));
   if (messageQueue == NULL) {
@@ -22,19 +20,23 @@ AtomicMqttQueue::~AtomicMqttQueue() {
 }
 
 bool AtomicMqttQueue::push(const MqttMessage &msg, TickType_t timeout) {
-  MqttMessagePtr ptr = std::make_shared<MqttMessage>(msg);
-  if (xQueueSend(messageQueue, &ptr, timeout) == pdTRUE) {
+  auto sp = new MqttMessagePtr(std::make_shared<MqttMessage>(msg));
+  if (xQueueSend(messageQueue, &sp, timeout) == pdTRUE) {
     hasMessage.store(true);
     return true;
   }
+  delete sp;
   log_w("Message queue full, dropping MQTT message");
   return false;
 }
 
 bool AtomicMqttQueue::pop(MqttMessage &msg) {
-  MqttMessagePtr ptr;
-  if (xQueueReceive(messageQueue, &ptr, 0) == pdTRUE && ptr) {
-    msg = *ptr;
+  MqttMessagePtr *sptr = nullptr;
+  if (xQueueReceive(messageQueue, &sptr, 0) == pdTRUE && sptr) {
+    if (*sptr) {
+      msg = *(*sptr);
+    }
+    delete sptr;
     if (uxQueueMessagesWaiting(messageQueue) == 0) {
       hasMessage.store(false);
     }
