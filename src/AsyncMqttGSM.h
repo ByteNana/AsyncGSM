@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EG915/EG915.h"
+#include <set>
 
 using AsyncMqttGSMCallback =
     std::function<void(char *, uint8_t *, unsigned int)>;
@@ -18,7 +19,7 @@ private:
   const char *apn;
   const char *user;
   const char *pass;
-  std::vector<const char *> subscribedTopics;
+  std::set<const char *> subscribedTopics;
 
   bool reconnect();
 

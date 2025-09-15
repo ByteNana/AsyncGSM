@@ -165,7 +165,7 @@ bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
 bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
-  subscribedTopics.push_back(topic);
+  subscribedTopics.insert(topic);
   // Client: 0, msgId: 1, topic, qos
   String cmd = String("AT+QMTSUB=0,1,\"") + topic + "\"," + String(qos);
   ATPromise *mqttPromise = at->sendCommand(cmd);
