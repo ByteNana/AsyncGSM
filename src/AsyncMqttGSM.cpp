@@ -69,13 +69,18 @@ AsyncMqttGSM &AsyncMqttGSM::setServer(const char *domain, uint16_t port) {
   return *this;
 }
 
-uint8_t AsyncMqttGSM::connected() { return isConnected; }
+uint8_t AsyncMqttGSM::connected() {
+  return modem->URCState.mqttState.load() == MqttConnectionState::CONNECTED;
+}
 
 bool AsyncMqttGSM::connect(const char *apn, const char *user,
                            const char *pass) {
 
+  this->apn = apn;
+  this->user = user;
+  this->pass = pass;
   // restarts connection process
-  isConnected = false;
+  modem->URCState.mqttState.store(MqttConnectionState::IDLE);
 
   ATPromise *mqttPromise = at->sendCommand("AT+QMTOPEN=0,\"" + String(domain) +
                                            "\"," + String(port));
@@ -114,7 +119,7 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user,
   }
   at->popCompletedPromise(mqttPromise->getId());
 
-  isConnected = true;
+  modem->URCState.mqttState.store(MqttConnectionState::CONNECTED);
   return true;
 }
 
@@ -160,6 +165,8 @@ bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
 bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
+  subscribedTopics.push_back(topic);
+  // Client: 0, msgId: 1, topic, qos
   String cmd = String("AT+QMTSUB=0,1,\"") + topic + "\"," + String(qos);
   ATPromise *mqttPromise = at->sendCommand(cmd);
   if (!mqttPromise->wait()) {
@@ -205,8 +212,19 @@ AsyncMqttGSM &AsyncMqttGSM::setCallback(AsyncMqttGSMCallback callback) {
 }
 
 void AsyncMqttGSM::loop() {
+  if (modem->URCState.mqttState.load() == MqttConnectionState::IDLE) {
+    return;
+  }
+
   if (!mqttCallback) {
     return;
+  }
+
+  if (modem->URCState.mqttState.load() == MqttConnectionState::DISCONNECTED) {
+    if (!reconnect()) {
+      log_e("Failed to reconnect to MQTT server");
+      return;
+    }
   }
 
   if (modem->mqttQueueSub->size() == 0) {
@@ -218,4 +236,24 @@ void AsyncMqttGSM::loop() {
     mqttCallback((char *)message.topic.c_str(), message.payload.data(),
                  message.length);
   }
+}
+
+bool AsyncMqttGSM::reconnect() {
+  log_i("Reconnecting to MQTT server...");
+  if (!connect(apn, user, pass)) {
+    log_e("Failed to reconnect to MQTT server");
+    return false;
+  }
+
+  // Resubscribe to topics
+  for (const auto &topic : subscribedTopics) {
+    if (!subscribe(topic)) {
+      log_e("Failed to resubscribe to topic: %s", topic);
+      return false;
+    }
+  }
+
+  log_i("Reconnected to MQTT server and resubscribed to topics.");
+  modem->URCState.mqttState.store(MqttConnectionState::CONNECTED);
+  return true;
 }

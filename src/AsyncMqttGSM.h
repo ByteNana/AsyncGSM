@@ -15,7 +15,12 @@ private:
 
   const char *domain;
   uint16_t port;
-  bool isConnected = false;
+  const char *apn;
+  const char *user;
+  const char *pass;
+  std::vector<const char *> subscribedTopics;
+
+  bool reconnect();
 
 public:
   AsyncMqttGSM();

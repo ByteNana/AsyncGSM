@@ -247,4 +247,9 @@ void AsyncEG915U::handleURC(const String &urc) {
 
     consumeOkResponse(at->getStream());
   }
+
+  if (trimmed.startsWith("+QMTSAT:")) {
+    log_w("URC: +QMTSAT received");
+    URCState.mqttState.store(MqttConnectionState::DISCONNECTED);
+  }
 }

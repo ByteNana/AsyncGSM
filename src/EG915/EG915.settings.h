@@ -18,7 +18,14 @@ enum class ConnectionStatus {
   CONNECTED,
 };
 
+enum class MqttConnectionState {
+  IDLE,
+  DISCONNECTED,
+  CONNECTED,
+};
+
 struct UrcState {
   std::atomic<RegStatus> creg{RegStatus::REG_NO_RESULT};
   std::atomic<ConnectionStatus> isConnected{ConnectionStatus::DISCONNECTED};
+  std::atomic<MqttConnectionState> mqttState{MqttConnectionState::IDLE};
 };
