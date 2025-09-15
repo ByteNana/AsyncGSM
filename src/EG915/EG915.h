@@ -2,8 +2,8 @@
 
 #include <Arduino.h>
 #include <AsyncATHandler.h>
-#include <Stream.h>
 #include <MqttQueue/MqttQueue.h>
+#include <Stream.h>
 
 #include "EG915.settings.h"
 

@@ -2,8 +2,10 @@
 #include "esp_log.h"
 #include <memory>
 
+using MqttMessagePtr = std::shared_ptr<MqttMessage>;
+
 AtomicMqttQueue::AtomicMqttQueue() {
-  messageQueue = xQueueCreate(10, sizeof(MqttMessage *));
+  messageQueue = xQueueCreate(10, sizeof(MqttMessagePtr));
   if (messageQueue == NULL) {
     log_e("Failed to create message queue - CRITICAL");
   }
@@ -11,9 +13,8 @@ AtomicMqttQueue::AtomicMqttQueue() {
 
 AtomicMqttQueue::~AtomicMqttQueue() {
   if (messageQueue != NULL) {
-    MqttMessage *raw = nullptr;
-    while (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
-      std::unique_ptr<MqttMessage> uptr(raw);
+    MqttMessagePtr msg;
+    while (xQueueReceive(messageQueue, &msg, 0) == pdTRUE) {
     }
     hasMessage.store(false);
     vQueueDelete(messageQueue);
@@ -21,10 +22,8 @@ AtomicMqttQueue::~AtomicMqttQueue() {
 }
 
 bool AtomicMqttQueue::push(const MqttMessage &msg, TickType_t timeout) {
-  auto ptr = std::make_unique<MqttMessage>(msg);
-  MqttMessage *raw = ptr.get();
-  if (xQueueSend(messageQueue, &raw, timeout) == pdTRUE) {
-    auto a = ptr.release();
+  MqttMessagePtr ptr = std::make_shared<MqttMessage>(msg);
+  if (xQueueSend(messageQueue, &ptr, timeout) == pdTRUE) {
     hasMessage.store(true);
     return true;
   }
@@ -33,10 +32,9 @@ bool AtomicMqttQueue::push(const MqttMessage &msg, TickType_t timeout) {
 }
 
 bool AtomicMqttQueue::pop(MqttMessage &msg) {
-  MqttMessage *raw = nullptr;
-  if (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
-    std::unique_ptr<MqttMessage> uptr(raw);
-    msg = *uptr;
+  MqttMessagePtr ptr;
+  if (xQueueReceive(messageQueue, &ptr, 0) == pdTRUE && ptr) {
+    msg = *ptr;
     if (uxQueueMessagesWaiting(messageQueue) == 0) {
       hasMessage.store(false);
     }
@@ -45,21 +43,15 @@ bool AtomicMqttQueue::pop(MqttMessage &msg) {
   return false;
 }
 
-bool AtomicMqttQueue::empty() {
-  return !hasMessage.load();
-}
+bool AtomicMqttQueue::empty() { return !hasMessage.load(); }
 
-size_t AtomicMqttQueue::size() {
-  return uxQueueMessagesWaiting(messageQueue);
-}
+size_t AtomicMqttQueue::size() { return uxQueueMessagesWaiting(messageQueue); }
 
 void AtomicMqttQueue::clear() {
   if (messageQueue != NULL) {
-    MqttMessage *raw = nullptr;
-    while (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
-      std::unique_ptr<MqttMessage> uptr(raw);
+    MqttMessagePtr ptr;
+    while (xQueueReceive(messageQueue, &ptr, 0) == pdTRUE) {
     }
   }
   hasMessage.store(false);
 }
-
