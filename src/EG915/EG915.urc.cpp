@@ -206,13 +206,14 @@ void AsyncEG915U::handleURC(const String &urc) {
 
     MqttMessage msg;
     msg.topic = topic;
-    msg.length = payloadLength;
     // Convert String payload to vector<uint8_t>
     msg.payload.clear();
     msg.payload.reserve(payloadLength);
     for (int i = 0; i < payload.length(); i++) {
       msg.payload.push_back(static_cast<uint8_t>(payload.charAt(i)));
     }
+    msg.length = msg.payload.size();
+
     if (mqttQueueSub->push(msg, pdMS_TO_TICKS(10))) { // 10ms timeout
       log_i("URC: MQTT message queued, payload length %d", payloadLength);
     } else {

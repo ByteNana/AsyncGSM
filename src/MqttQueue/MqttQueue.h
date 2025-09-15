@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "freertos/FreeRTOS.h"
 #include <queue>
+#include <atomic>
 
 struct MqttMessage {
   String topic;
