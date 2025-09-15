@@ -2,6 +2,39 @@
 #include "esp_log.h"
 #include <MqttQueue/MqttQueue.h>
 
+static bool consumeOkResponse(Stream *stream) {
+  String tail = "";
+  unsigned long startTime = millis();
+  const unsigned long timeout = 5000; // 5 second timeout
+
+  while (millis() - startTime < timeout) {
+    if (stream->available()) {
+      int c = stream->read();
+      if (c >= 0) {
+        uint8_t byte = static_cast<uint8_t>(c);
+
+        // Check for terminator
+        tail += (char)byte;
+        if (tail.endsWith("\r\nOK\r\n")) {
+          log_d("Found OK response");
+          return true;
+        }
+
+        // Prevent tail string from growing without bound
+        if (tail.length() > 8) {
+          tail.remove(0, tail.length() - 8);
+        }
+      }
+    } else {
+      // No data available, small delay to avoid busy waiting
+      delay(1);
+    }
+  }
+
+  log_w("Timeout waiting for OK response");
+  return false;
+}
+
 void AsyncEG915U::handleURC(const String &urc) {
   String trimmed = urc;
   trimmed.trim();
@@ -212,14 +245,6 @@ void AsyncEG915U::handleURC(const String &urc) {
       log_e("URC: MQTT queue full - dropping message");
     }
 
-    // Consume \r\nOK\r\n from serial stream
-    while (at->getStream()->available()) {
-      int c = at->getStream()->read();
-      if (c >= 0) {
-        // Just consume the OK response
-      } else {
-        break;
-      }
-    }
+    consumeOkResponse(at->getStream());
   }
 }

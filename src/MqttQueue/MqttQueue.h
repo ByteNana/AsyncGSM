@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include <queue>
+#include <memory>
 
 struct MqttMessage {
   String topic;
