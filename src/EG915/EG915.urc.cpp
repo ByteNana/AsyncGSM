@@ -124,12 +124,10 @@ void AsyncEG915U::handleURC(const String &urc) {
   if (urc.startsWith("+QMTRECV:")) {
     log_w("URC: +QMTRECV received");
     int commaCount = std::count(urc.begin(), urc.end(), ',');
-
     int headerStart = urc.indexOf(':');
     int firstComma = urc.indexOf(',');
     String afterFirstComma = urc.substring(firstComma + 1);
     afterFirstComma.trim();
-
     if (headerStart == -1 || firstComma == -1 ||
         afterFirstComma.length() == 0) {
       log_e("URC: Failed to parse +QMTRECV header");
@@ -137,17 +135,14 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
 
     String clientId = urc.substring(headerStart + 1, firstComma);
-
     int numEnd = 0;
     while (numEnd < afterFirstComma.length() &&
            isDigit(afterFirstComma.charAt(numEnd))) {
       numEnd++;
     }
     String msgId = afterFirstComma.substring(0, numEnd);
-
     log_i("URC: MQTT message for client %d on topic ID %d", clientId.toInt(),
           msgId.toInt());
-
     if (commaCount <= 1) {
       // QMTRECV=<client>,<msgid>
       at->getStream()->print("AT+QMTRECV=" + clientId + "," + msgId + "\r\n");
@@ -156,66 +151,63 @@ void AsyncEG915U::handleURC(const String &urc) {
     }
 
     if (!mqttQueueSub) {
-      log_w("URC: MQTT message received but mqttRxBuffer is not set");
+      log_w("URC: MQTT message received but mqttQueueSub is not set");
       return;
     }
-    // +QMTRECV: <client>,<topic>,<payload_length><CR><LF><payload>
-    // Example: +QMTRECV: 0,"test/topic",13, "Hello, world!"
+
+    // Find topic: starts after second comma, enclosed in quotes
     int secondComma = urc.indexOf(',', firstComma + 1);
-    int thirdComma = urc.indexOf(',', secondComma + 1);
-
-    if (secondComma == -1 || thirdComma == -1) {
-      log_e("URC: Failed to parse MQTT message - missing commas");
+    if (secondComma == -1) {
+      log_e("URC: Failed to find topic");
       return;
     }
 
-    // Extract topic (between second and third comma)
-    String topic = urc.substring(secondComma + 1, thirdComma);
-    topic.trim();
-    if (topic.startsWith("\"") && topic.endsWith("\"")) {
-      topic = topic.substring(1, topic.length() - 1);
+    // Find first quote after second comma (topic start)
+    int topicStart = urc.indexOf('"', secondComma + 1);
+    if (topicStart == -1) {
+      log_e("URC: Failed to find topic start quote");
+      return;
     }
 
-    // Everything after third comma
-    String remainder = urc.substring(thirdComma + 1);
-    remainder.trim();
-
-    String payload = "";
-    int payloadLength = 0;
-
-    // Check if we have another comma (indicating payload_length is present)
-    int fourthComma = remainder.indexOf(',');
-    if (fourthComma != -1) {
-      // Format: +QMTRECV: <client>,<msgid>,<topic>,<payload_length>,<payload>
-      String payloadLengthStr = remainder.substring(0, fourthComma);
-      payloadLength = payloadLengthStr.toInt();
-      payload = remainder.substring(fourthComma + 1);
-    } else {
-      // Format: +QMTRECV: <client>,<msgid>,<topic>,<payload>
-      payload = remainder;
-      payloadLength = payload.length();
+    // Find next quote (topic end)
+    int topicEnd = urc.indexOf('"', topicStart + 1);
+    if (topicEnd == -1) {
+      log_e("URC: Failed to find topic end quote");
+      return;
     }
 
-    // Remove quotes from payload if present
-    if (payload.startsWith("\"") && payload.endsWith("\"")) {
-      payload = payload.substring(1, payload.length() - 1);
+    String topic = urc.substring(topicStart + 1, topicEnd);
+
+    // Find payload: first quote after topic end to last quote in string
+    int payloadStart = urc.indexOf('"', topicEnd + 1);
+    if (payloadStart == -1) {
+      log_e("URC: Failed to find payload start quote");
+      return;
     }
 
-    log_i("URC: Topic: '%s', PayloadLength: %d, Payload: '%s'", topic.c_str(),
-          payloadLength, payload.c_str());
+    // Find last quote in the entire string (payload end)
+    int payloadEnd = urc.lastIndexOf('"');
+    if (payloadEnd <= payloadStart) {
+      log_e("URC: Failed to find payload end quote");
+      return;
+    }
+
+    String payload = urc.substring(payloadStart + 1, payloadEnd);
+
+    log_i("URC: Topic: '%s', Payload: '%s'", topic.c_str(), payload.c_str());
 
     MqttMessage msg;
     msg.topic = topic;
     // Convert String payload to vector<uint8_t>
     msg.payload.clear();
-    msg.payload.reserve(payloadLength);
+    msg.payload.reserve(payload.length());
     for (int i = 0; i < payload.length(); i++) {
       msg.payload.push_back(static_cast<uint8_t>(payload.charAt(i)));
     }
     msg.length = msg.payload.size();
 
-    if (mqttQueueSub->push(msg, pdMS_TO_TICKS(10))) { // 10ms timeout
-      log_i("URC: MQTT message queued, payload length %d", payloadLength);
+    if (mqttQueueSub->push(msg, pdMS_TO_TICKS(10))) {
+      log_i("URC: MQTT message queued, payload length %d", msg.length);
     } else {
       log_e("URC: MQTT queue full - dropping message");
     }
@@ -224,7 +216,7 @@ void AsyncEG915U::handleURC(const String &urc) {
     while (at->getStream()->available()) {
       int c = at->getStream()->read();
       if (c >= 0) {
-        // Just consume the OK response, don't store it
+        // Just consume the OK response
       } else {
         break;
       }
