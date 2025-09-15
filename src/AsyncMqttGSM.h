@@ -9,7 +9,7 @@ class AsyncMqttGSM {
 private:
   AsyncEG915U *modem = nullptr;
   AsyncATHandler *at = nullptr;
-  std::deque<uint8_t> mqttRxBuffer;
+  AtomicMqttQueue mqttQueueSub;
 
   AsyncMqttGSMCallback mqttCallback = nullptr;
 

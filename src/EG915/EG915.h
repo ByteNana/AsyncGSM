@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <AsyncATHandler.h>
 #include <Stream.h>
+#include <MqttQueue/MqttQueue.h>
 
 #include "EG915.settings.h"
 
@@ -16,7 +17,7 @@ private:
 
 public:
   UrcState URCState;
-  std::deque<uint8_t> *mqttRxBuffer = nullptr;
+  AtomicMqttQueue *mqttQueueSub = nullptr;
 
   AsyncEG915U();
   ~AsyncEG915U();

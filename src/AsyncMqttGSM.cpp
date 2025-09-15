@@ -7,7 +7,7 @@ bool AsyncMqttGSM::init(AsyncEG915U &modem, AsyncATHandler &atHandler) {
   log_i("Initializing AsyncMqttGSM...");
   this->modem = &modem;
   this->at = &atHandler;
-  this->modem->mqttRxBuffer = &mqttRxBuffer;
+  this->modem->mqttQueueSub = &mqttQueueSub;
 
   ATPromise *mqttPromise = at->sendCommand("AT+QMTCFG=\"recv/mode\",0,1");
   if (!mqttPromise->wait()) {
@@ -208,43 +208,14 @@ void AsyncMqttGSM::loop() {
   if (!mqttCallback) {
     return;
   }
-  if (modem->URCState.hasMqttMessage.load() == MqttSubsReceived::IDLE)
-    return;
 
-  std::vector<size_t> commaPositions;
-  for (size_t i = 0; i < mqttRxBuffer.size(); ++i) {
-    if (mqttRxBuffer[i] == ',') {
-      commaPositions.push_back(i);
-    }
+  if (modem->mqttQueueSub->size() == 0) {
+    return;
   }
 
-  if (commaPositions.size() < 2)
-    return;
-
-  // Extract topic and payload length directly
-  std::string topic = std::string(mqttRxBuffer.begin() + commaPositions[0] + 1,
-                                  mqttRxBuffer.begin() + commaPositions[1]);
-
-  std::string lengthStr(mqttRxBuffer.begin() + commaPositions[1] + 1,
-                        mqttRxBuffer.end());
-  int payloadLength = std::stoi(lengthStr);
-
-  // Extract payload
-  std::vector<uint8_t> payload;
-  payload.reserve(payloadLength);
-
-  size_t payloadStartIndex = commaPositions[1] + 1 + lengthStr.length();
-  for (size_t i = 0; i < payloadLength; ++i) {
-    if (payloadStartIndex + i < mqttRxBuffer.size()) {
-      payload.push_back(mqttRxBuffer[payloadStartIndex + i]);
-    } else {
-      log_e("Payload length exceeds buffer size");
-      break;
-    }
+  MqttMessage message;
+  while (mqttQueueSub.pop(message)) {
+    mqttCallback((char *)message.topic.c_str(), message.payload.data(),
+                 message.length);
   }
-  // Call the user callback
-  mqttCallback((char *)topic.c_str(), payload.data(), payload.size());
-
-  // Reset the flag
-  modem->URCState.hasMqttMessage.store(MqttSubsReceived::IDLE);
 }
