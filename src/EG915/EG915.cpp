@@ -295,6 +295,17 @@ String AsyncEG915U::getIPAddress() {
   return result;
 }
 
+bool AsyncEG915U::stop() {
+  ATPromise *promise = at->sendCommand("AT+QICLOSE=0");
+  if (!promise->wait() || !promise->getResponse()->isSuccess()) {
+    log_e("Failed to close connection or already closed");
+    at->popCompletedPromise(promise->getId());
+    return false;
+  }
+  at->popCompletedPromise(promise->getId());
+  return true;
+}
+
 bool AsyncEG915U::connect(const char *host, uint16_t port) {
   String portStr(port);
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);

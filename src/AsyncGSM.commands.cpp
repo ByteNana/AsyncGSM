@@ -9,3 +9,8 @@ bool AsyncGSM::isConnected() {
 bool AsyncGSM::modemConnect(const char *host, uint16_t port) {
   return modem.connect(host, port);
 }
+
+bool AsyncGSM::modemStop() {
+  modem.stop();
+  return true;
+}

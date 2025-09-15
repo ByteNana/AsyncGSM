@@ -13,4 +13,5 @@ public:
 
 protected:
   bool modemConnect(const char *host, uint16_t port) override;
+  bool modemStop() override;
 };

@@ -37,7 +37,9 @@ public:
   String getOperator();
   String getIPAddress();
   bool connect(const char *host, uint16_t port);
+  bool stop();
   bool connectSecure(const char *host, uint16_t port);
+  bool stopSecure();
 
   // Helpers for GPRS connection
   void disableConnections();

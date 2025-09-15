@@ -96,22 +96,7 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 
 void AsyncGSM::stop() {
   log_i("Stopping connection...");
-  ATPromise *promise = at.sendCommand("AT+QICLOSE=0");
-  if (!promise->wait()) {
-    at.popCompletedPromise(promise->getId());
-    log_e("Failed to close connection or already closed");
-    return;
-  }
-  at.popCompletedPromise(promise->getId());
-  modem.URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-
-  ATPromise *deactPromise = at.sendCommand("AT+QIDEACT=1");
-  if (!deactPromise->wait()) {
-    at.popCompletedPromise(deactPromise->getId());
-    log_e("Failed to deactivate PDP context or already inactive");
-    return;
-  }
-  at.popCompletedPromise(deactPromise->getId());
+  modemStop();
   log_i("Connection stopped.");
 }
 
