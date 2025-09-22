@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <AsyncATHandler.h>
 #include <Client.h>
+#include "AsyncGuard.h"
 
 #include "EG915/EG915.h"
 

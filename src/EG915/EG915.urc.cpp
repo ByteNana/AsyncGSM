@@ -136,6 +136,7 @@ void AsyncEG915U::handleURC(const String &urc) {
     // printBuffer(rxBuffer);
     at->getStream()->print("AT+QIRD=0\r\n");
     at->getStream()->flush();
+    consumeOkResponse(at->getStream());
   }
 
   if (urc.startsWith("+QMTRECV:")) {

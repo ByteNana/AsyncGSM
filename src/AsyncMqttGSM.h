@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AsyncGuard.h"
 #include "EG915/EG915.h"
 #include <set>
 

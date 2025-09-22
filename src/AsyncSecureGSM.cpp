@@ -5,4 +5,6 @@ bool AsyncSecureGSM::modemConnect(const char *host, uint16_t port) {
   return modem.connectSecure(host, port);
 }
 
-bool AsyncSecureGSM::modemStop() { return modem.stopSecure(); }
+bool AsyncSecureGSM::modemStop() {
+  return modem.stopSecure();
+}
