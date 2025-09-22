@@ -6,7 +6,6 @@ const String cidx = "1";
 AsyncMqttGSM::AsyncMqttGSM() {}
 
 bool AsyncMqttGSM::init(AsyncEG915U &modem, AsyncATHandler &atHandler) {
-  AsyncGuard guard;
   log_i("Initializing AsyncMqttGSM...");
   this->modem = &modem;
   this->at = &atHandler;
@@ -80,7 +79,6 @@ uint8_t AsyncMqttGSM::connected() {
 bool AsyncMqttGSM::connect(const char *apn, const char *user,
                            const char *pass) {
 
-  AsyncGuard guard;
   this->apn = apn;
   this->user = user;
   this->pass = pass;
@@ -130,7 +128,6 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user,
 
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
                            unsigned int plength) {
-  AsyncGuard guard;
   // Client: 0, msgId: 1, qos: 1, retain: 0
   String cmd = String("AT+QMTPUBEX=" + cidx + ",1,1,0,\"") + topic + "\"," +
                String(plength);
@@ -172,7 +169,6 @@ bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload,
 bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
-  AsyncGuard guard;
   subscribedTopics.insert(topic);
   // Client: 0, msgId: 1, topic, qos
   String cmd =
@@ -196,7 +192,6 @@ bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
 }
 
 bool AsyncMqttGSM::unsubscribe(const char *topic) {
-  AsyncGuard guard;
   String cmd = String("AT+QMTUNSUB=" + cidx + ",1,\"") + topic + "\"";
   ATPromise *mqttPromise = at->sendCommand(cmd);
   if (!mqttPromise->wait()) {

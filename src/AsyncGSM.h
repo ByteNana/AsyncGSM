@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <AsyncATHandler.h>
 #include <Client.h>
-#include "AsyncGuard.h"
 
 #include "EG915/EG915.h"
 
@@ -16,6 +15,7 @@ private:
 
   void lockRx() { xSemaphoreTake(rxMutex, portMAX_DELAY); }
   void unlockRx() { xSemaphoreGive(rxMutex); }
+
 public:
   AsyncEG915U modem;
   AsyncATHandler at;

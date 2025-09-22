@@ -27,7 +27,6 @@ RegStatus AsyncGSM::getRegistrationStatus() {
 }
 
 bool AsyncGSM::begin(const char *apn) {
-  AsyncGuard guard;
   bool canCommunicate = false;
   for (int i = 0; i < 4; i++) {
     if (at.sendSync("AT", 2000)) {
@@ -91,13 +90,11 @@ int AsyncGSM::connect(IPAddress ip, uint16_t port) {
 }
 
 int AsyncGSM::connect(const char *host, uint16_t port) {
-  AsyncGuard guard;
   log_i("Connecting to %s:%d", host, port);
   return modemConnect(host, port);
 }
 
 void AsyncGSM::stop() {
-  AsyncGuard guard;
   log_i("Stopping connection...");
   modemStop();
   log_i("Connection stopped.");

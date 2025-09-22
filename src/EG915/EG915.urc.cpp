@@ -119,7 +119,8 @@ void AsyncEG915U::handleURC(const String &urc) {
     unsigned long lastByteTs = millis();
     String tail; // Move tail tracking to main loop
     while (remaining > 0) {
-      if (!at->getStream()->available()) continue;
+      if (!at->getStream()->available())
+        continue;
       char c = at->getStream()->read();
       tail += c;
       remaining--;
