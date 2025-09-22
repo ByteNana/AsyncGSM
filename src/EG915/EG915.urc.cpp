@@ -2,36 +2,37 @@
 #include "esp_log.h"
 #include <MqttQueue/MqttQueue.h>
 
-static bool consumeOkResponse(Stream *stream) {
-  String tail = "";
-  unsigned long startTime = millis();
-  const unsigned long timeout = 5000; // 5 second timeout
+#include <iomanip>
+#include <iostream>
 
-  while (millis() - startTime < timeout) {
-    if (stream->available()) {
-      int c = stream->read();
-      if (c >= 0) {
-        uint8_t byte = static_cast<uint8_t>(c);
-
-        // Check for terminator
-        tail += (char)byte;
-        if (tail.endsWith("\r\nOK\r\n")) {
-          log_d("Found OK response");
-          return true;
-        }
-
-        // Prevent tail string from growing without bound
-        if (tail.length() > 8) {
-          tail.remove(0, tail.length() - 8);
-        }
-      }
-    } else {
-      // No data available, small delay to avoid busy waiting
-      delay(1);
-    }
+void printBuffer(std::deque<uint8_t> *rxBuffer) {
+  if (!rxBuffer) {
+    std::cout << "rxBuffer is null\n";
+    return;
   }
 
-  log_w("Timeout waiting for OK response");
+  std::cout << "rxBuffer as chars: ";
+  for (uint8_t b : *rxBuffer) {
+    std::cout << static_cast<char>(b);
+  }
+  std::cout << "\n";
+}
+
+static bool consumeOkResponse(Stream *stream) {
+  String tail = "";
+  while (stream->available()) {
+    int c = stream->read();
+    if (c >= 0) {
+      tail += (char)c;
+      if (tail.endsWith("\r\nOK\r\n")) {
+        return true;
+      }
+      // Prevent tail string from growing without bound
+      if (tail.length() > 8) {
+        tail.remove(0, tail.length() - 8);
+      }
+    }
+  }
   return false;
 }
 
@@ -116,42 +117,22 @@ void AsyncEG915U::handleURC(const String &urc) {
     // Pull exactly <remaining> bytes from the stream into the TCP rx buffer
     unsigned long lastByteTs = millis();
     String tail; // Move tail tracking to main loop
-    while (remaining > 0) {
-      if (at->getStream()->available()) {
-        int c = at->getStream()->read();
-        if (c >= 0) {
-          uint8_t byte = static_cast<uint8_t>(c);
-          rxBuffer->push_back(byte);
-          remaining--;
-          lastByteTs = millis();
-
-          // Check for terminator
-          tail += (char)byte;
-          if (tail.endsWith("\r\nOK\r\n")) {
-            // Remove the terminator from rxBuffer
-            for (int i = 0; i < 6; i++) { // "\r\nOK\r\n" is 6 bytes
-              if (!rxBuffer->empty())
-                rxBuffer->pop_back();
-            }
-            break;
-          }
-          // Prevent tail string from growing without bound
-          if (tail.length() > 8) {
-            tail.remove(0, tail.length() - 8);
-          }
-        }
-      } else {
-        // Yield a tick and enforce a simple timeout to avoid stalling forever
-        vTaskDelay(pdMS_TO_TICKS(1));
-        if (millis() - lastByteTs > 5000) {
-          log_w("QIRD: Timed out while reading payload, %d bytes remain",
-                remaining);
-          break;
-        }
+    while (at->getStream()->available()) {
+      char c = at->getStream()->read();
+      tail += c;
+      remaining--;
+      if (remaining <= 0) {
+        break;
       }
+    }
+    consumeOkResponse(at->getStream());
+    for (char c : tail) {
+      rxBuffer->push_back(static_cast<uint8_t>(c));
     }
     // No need for separate tail reading section anymore
     log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
+    log_d("Buffer dump:");
+    printBuffer(rxBuffer);
   }
 
   if (urc.startsWith("+QMTRECV:")) {

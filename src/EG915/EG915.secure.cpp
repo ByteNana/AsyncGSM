@@ -41,7 +41,7 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
 
   // Open ssl connection
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  sslPromise = at->sendCommand(String("AT+QSSLOPEN=1,1,1,\"") + host + "\"," +
+  sslPromise = at->sendCommand(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," +
                                String(port) + ",0");
   if (!sslPromise->wait()) {
     log_e("Failed to open SSL connection");
@@ -68,7 +68,7 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
 }
 
 bool AsyncEG915U::stopSecure() {
-  ATPromise *promise = at->sendCommand("AT+QSSLCLOSE=1");
+  ATPromise *promise = at->sendCommand("AT+QSSLCLOSE=0");
   if (!promise->wait()) {
     log_e("Failed to close SSL connection or already closed");
     at->popCompletedPromise(promise->getId());
