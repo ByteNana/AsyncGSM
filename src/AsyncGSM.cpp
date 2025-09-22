@@ -17,7 +17,7 @@ bool AsyncGSM::init(Stream &stream) {
     log_e("Failed to initialize AsyncATHandler");
     return false;
   }
-  modem.init(stream, at, rxBuffer);
+  modem.init(stream, at, rxBuffer, rxMutex);
 
   return true;
 }
@@ -163,19 +163,23 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 
 int AsyncGSM::available() {
   vTaskDelay(pdMS_TO_TICKS(10));
-
-  return (int)rxBuffer.size();
+  lockRx();
+  int availableBytes = (int)rxBuffer.size();
+  unlockRx();
+  return availableBytes;
 }
 
 int AsyncGSM::read() {
   // Avoid logs here.
   // log_d("read() called...");
-  if (rxBuffer.size() == 0) {
-    return -1;
+  lockRx();
+  int out = -1;
+  if (!rxBuffer.empty()) {
+    out = (int)rxBuffer.front();
+    rxBuffer.pop_front();
   }
-  char c = rxBuffer.front();
-  rxBuffer.pop_front();
-  return static_cast<unsigned char>(c);
+  unlockRx();
+  return out;
 }
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {
@@ -183,12 +187,14 @@ int AsyncGSM::read(uint8_t *buf, size_t size) {
   if (rxBuffer.empty() || size == 0) {
     return 0;
   }
+  lockRx();
 
   size_t toCopy = min(size, rxBuffer.size());
   for (size_t i = 0; i < toCopy; i++) {
     buf[i] = rxBuffer.front();
     rxBuffer.pop_front();
   }
+  unlockRx();
   return toCopy;
 }
 

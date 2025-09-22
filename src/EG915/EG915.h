@@ -12,8 +12,11 @@ private:
   Stream *_stream = nullptr;
   AsyncATHandler *at;
   std::deque<uint8_t> *rxBuffer;
+  SemaphoreHandle_t rxMutex = nullptr;
 
   void handleURC(const String &urc);
+  void lockRx() { xSemaphoreTake(rxMutex, portMAX_DELAY); }
+  void unlockRx() { xSemaphoreGive(rxMutex); }
 
 public:
   UrcState URCState;
@@ -22,7 +25,7 @@ public:
   AsyncEG915U();
   ~AsyncEG915U();
   bool init(Stream &stream, AsyncATHandler &atHandler,
-            std::deque<uint8_t> &rxBuf);
+            std::deque<uint8_t> &rxBuf, SemaphoreHandle_t &mutex);
   bool setEchoOff();
   bool enableVerboseErrors();
   bool checkModemModel();

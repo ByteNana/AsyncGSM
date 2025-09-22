@@ -10,10 +10,11 @@ AsyncEG915U::~AsyncEG915U() {
 }
 
 bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
-                       std::deque<uint8_t> &rxBuf) {
+                       std::deque<uint8_t> &rxBuf, SemaphoreHandle_t &mutex) {
   at = &atHandler;
   _stream = &stream;
   rxBuffer = &rxBuf;
+  rxMutex = mutex;
   // Register our URC handler
   at->onURC([this](const String &urc) { this->handleURC(urc); });
   return true;

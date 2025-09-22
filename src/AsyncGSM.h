@@ -9,9 +9,12 @@
 class AsyncGSM : public Client {
 private:
   std::deque<uint8_t> rxBuffer;
+  SemaphoreHandle_t rxMutex = xSemaphoreCreateMutex();
   bool endOfDataReached;
   int consecutiveEmptyReads;
 
+  void lockRx() { xSemaphoreTake(rxMutex, portMAX_DELAY); }
+  void unlockRx() { xSemaphoreGive(rxMutex); }
 public:
   AsyncEG915U modem;
   AsyncATHandler at;
