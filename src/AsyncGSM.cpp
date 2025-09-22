@@ -170,9 +170,12 @@ int AsyncGSM::available() {
 int AsyncGSM::read() {
   // Avoid logs here.
   // log_d("read() called...");
+  if (rxBuffer.size() == 0) {
+    return -1;
+  }
   char c = rxBuffer.front();
   rxBuffer.pop_front();
-  return c;
+  return static_cast<unsigned char>(c);
 }
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {

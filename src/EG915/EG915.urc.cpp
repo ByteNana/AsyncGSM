@@ -75,7 +75,8 @@ void AsyncEG915U::handleURC(const String &urc) {
   }
 
   if (trimmed.startsWith("+QICLOSE:") ||
-      trimmed.startsWith("+QSSLURC: \"closed\"")) {
+      trimmed.startsWith("+QSSLURC: \"closed\"") ||
+      trimmed.startsWith("+QIURC: \"closed\"")) {
     URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
     log_i("URC: Connection closed");
   }
@@ -133,6 +134,8 @@ void AsyncEG915U::handleURC(const String &urc) {
     log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
     log_d("Buffer dump:");
     printBuffer(rxBuffer);
+    at->getStream()->print("AT+QIRD=0\r\n");
+    at->getStream()->flush();
   }
 
   if (urc.startsWith("+QMTRECV:")) {
