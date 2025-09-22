@@ -118,22 +118,22 @@ void AsyncEG915U::handleURC(const String &urc) {
     // Pull exactly <remaining> bytes from the stream into the TCP rx buffer
     unsigned long lastByteTs = millis();
     String tail; // Move tail tracking to main loop
-    while (at->getStream()->available()) {
+    while (remaining > 0) {
+      if (!at->getStream()->available()) continue;
       char c = at->getStream()->read();
       tail += c;
       remaining--;
-      if (remaining <= 0) {
-        break;
-      }
     }
     consumeOkResponse(at->getStream());
+    lockRx();
     for (char c : tail) {
       rxBuffer->push_back(static_cast<uint8_t>(c));
     }
+    unlockRx();
     // No need for separate tail reading section anymore
     log_d("QIRD: Appended bytes, rxBuffer size now %d", (int)rxBuffer->size());
-    log_d("Buffer dump:");
-    printBuffer(rxBuffer);
+    // log_d("Buffer dump:");
+    // printBuffer(rxBuffer);
     at->getStream()->print("AT+QIRD=0\r\n");
     at->getStream()->flush();
   }
