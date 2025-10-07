@@ -24,7 +24,11 @@ An HTTP client demonstration is available in `examples/http_client`.
 
 For additional PlatformIO usage see the example directories.
 
-## Hardware Tests
+## Testing
+
+For detailed testing documentation, see [docs/TESTING.md](docs/TESTING.md).
+
+### Hardware Tests
 
 Hardware integration tests can be executed using PlatformIO. First ensure
 PlatformIO is installed and an ESP32 board is connected. Then run:
@@ -35,3 +39,8 @@ make esp32-test
 
 This command flashes the hardware test suites for both examples onto the
 device and runs them using PlatformIO.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. For comprehensive unit testing
+improvement tracking, see [UNIT_TESTING_ISSUE.md](UNIT_TESTING_ISSUE.md).
