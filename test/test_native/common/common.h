@@ -8,37 +8,77 @@
 #include <chrono>
 #include <functional>
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 class GlobalSchedulerEnvironment : public ::testing::Environment {
 private:
   static std::thread globalSchedulerThread;
   static std::atomic<bool> globalSchedulerStarted;
+  static std::atomic<bool> globalSchedulerRunning;
+  static std::mutex schedMutex;
+  static std::condition_variable schedCv;
 
 public:
   void SetUp() override {
-    globalSchedulerThread = std::thread([]() {
-      globalSchedulerStarted = true;
-      vTaskStartScheduler();
-    });
-    while (!globalSchedulerStarted.load()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // Start only once per process
+    if (!globalSchedulerRunning.load()) {
+      globalSchedulerThread = std::thread([]() {
+        {
+          std::lock_guard<std::mutex> lk(schedMutex);
+          globalSchedulerStarted = true;
+          globalSchedulerRunning = true;
+        }
+        schedCv.notify_all();
+
+        vTaskStartScheduler();
+
+        // When the scheduler stops, mark running=false and notify waiters.
+        {
+          std::lock_guard<std::mutex> lk(schedMutex);
+          globalSchedulerRunning = false;
+        }
+        schedCv.notify_all();
+      });
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Wait (bounded) until the scheduler thread reports running=true
+    {
+      std::unique_lock<std::mutex> lk(schedMutex);
+      schedCv.wait_for(lk, std::chrono::milliseconds(2000), [] {
+        return globalSchedulerRunning.load();
+      });
+    }
+    // Small grace period to let timers/idle task spin up
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
   void TearDown() override {
     if (globalSchedulerThread.joinable()) {
       vTaskEndScheduler();
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      globalSchedulerThread.join();
+      // Wait (bounded) for the scheduler thread to acknowledge shutdown
+      {
+        std::unique_lock<std::mutex> lk(schedMutex);
+        schedCv.wait_for(lk, std::chrono::milliseconds(1000), [] {
+          return !globalSchedulerRunning.load();
+        });
+      }
+      // Join if it finished in time; otherwise detach to avoid deadlock
+      if (globalSchedulerRunning.load()) {
+        globalSchedulerThread.detach();
+      } else {
+        globalSchedulerThread.join();
+      }
     }
   }
 };
 
 // Define static members
 inline std::thread GlobalSchedulerEnvironment::globalSchedulerThread;
-inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerStarted{
-    false};
+inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerStarted{false};
+inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerRunning{false};
+inline std::mutex GlobalSchedulerEnvironment::schedMutex;
+inline std::condition_variable GlobalSchedulerEnvironment::schedCv;
 
 // Helper function to run code in a FreeRTOS task context
 inline bool runInFreeRTOSTask(std::function<void()> func,
@@ -91,7 +131,13 @@ inline bool runInFreeRTOSTask(std::function<void()> func,
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     waitTime += 10;
   }
-
+  // If the task is still running after timeout, force-delete it to avoid hangs
+  if (!taskComplete.load() && taskHandle != nullptr) {
+    // Best-effort cancellation of the task to prevent sticking around.
+    vTaskDelete(taskHandle);
+    // Mark as failed; caller will see false and proceed.
+    taskResult.store(false);
+  }
   return taskComplete.load() && taskResult.load();
 }
 
@@ -156,3 +202,4 @@ inline void InjectDataWithDelay(class MockStream *mockStream,
   xTaskCreate(injectorTask, "InjectorTask", configMINIMAL_STACK_SIZE * 2,
               injectorData, 1, &injectorHandle);
 }
+
