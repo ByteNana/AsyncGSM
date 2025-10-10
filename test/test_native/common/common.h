@@ -13,6 +13,12 @@
 #include <mutex>
 #include <thread>
 
+// Forward declaration for centralized RX injection helper (defined in
+// common/serial_io.h). This allows usage below without creating a header
+// include cycle.
+class MockStream;
+void InjectRx(MockStream *s, const std::string &data);
+
 class GlobalSchedulerEnvironment : public ::testing::Environment {
 private:
   static std::thread globalSchedulerThread;
@@ -167,7 +173,7 @@ inline void scheduleInject(class MockStream *stream, uint32_t delayMs,
   auto th = [](void *pv) {
     std::unique_ptr<Ctx> ctx(static_cast<Ctx *>(pv)); // RAII
     vTaskDelay(pdMS_TO_TICKS(ctx->d));
-    ctx->s->InjectRxData(ctx->p);
+    InjectRx(ctx->s, ctx->p);
     vTaskDelete(nullptr);
   };
   auto *ctx = new Ctx{stream, std::move(payload), delayMs};

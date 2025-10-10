@@ -39,11 +39,10 @@ static void startGprsResponder(NiceMock<MockStream> *mockStream,
 
     // Signal network registered (URC) so setPDPContext won't loop.
     s->InjectRxData("+CREG: 0,1\r\n");
-    SERIAL_LOG("RX", std::string("+CREG: 0,1"));
 
     std::string buf;
     while (!done->load()) {
-      std::string tx = s->GetTxData();
+      std::string tx = DrainTx(s);
       if (!tx.empty())
         buf += tx;
 
@@ -56,62 +55,43 @@ static void startGprsResponder(NiceMock<MockStream> *mockStream,
 
         // gprsConnect() path only
         if (cmd == "AT+CREG?") {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (starts_with("AT+CGDCONT=")) {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (starts_with("AT+QIDEACT=1")) {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (starts_with("AT+QICSGP=")) {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (cmd == "AT+CGATT?") {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("+CGATT: 1\r\nOK\r\n");
-          SERIAL_LOG("RX", std::string("+CGATT: 1"));
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "+CGATT: 1\r\nOK\r\n");
           continue;
         }
         if (cmd == "AT+QIACT=1") {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (cmd == "AT+CGACT=1,1") {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("+CGACT: 1,1\r\nOK\r\n");
-          SERIAL_LOG("RX", std::string("+CGACT: 1,1"));
-          SERIAL_LOG("RX", std::string("OK"));
+          // Suppress informative +CGACT URC in tests to avoid races; send only
+          // OK
+          InjectRx(s, "OK\r\n");
           continue;
         }
         if (cmd == "AT+QIACT?") {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("+QIACT: 1,1\r\nOK\r\n");
-          SERIAL_LOG("RX", std::string("+QIACT: 1,1"));
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "+QIACT: 1,1\r\nOK\r\n");
           continue;
         }
 
         // Default OK for any other command (harmless)
         if (starts_with("AT+")) {
-          SERIAL_LOG("TX", cmd);
-          s->InjectRxData("OK\r\n");
-          SERIAL_LOG("RX", std::string("OK"));
+          InjectRx(s, "OK\r\n");
           continue;
         }
       }
