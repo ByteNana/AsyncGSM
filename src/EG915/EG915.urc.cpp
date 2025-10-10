@@ -182,12 +182,14 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
   }
 
   String clientId = urc.substring(headerStart + 1, firstComma);
+  clientId.trim();
   int numEnd = 0;
   while (numEnd < afterFirstComma.length() &&
          isDigit(afterFirstComma.charAt(numEnd))) {
     numEnd++;
   }
   String msgId = afterFirstComma.substring(0, numEnd);
+  msgId.trim();
   log_i("URC: MQTT message for client %d on topic ID %d", clientId.toInt(),
         msgId.toInt());
   if (commaCount <= 1) {
