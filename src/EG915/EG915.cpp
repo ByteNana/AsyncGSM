@@ -51,7 +51,8 @@ bool AsyncEG915U::checkTimezone() { return at->sendSync("AT+CTZU=1"); }
 
 bool AsyncEG915U::checkSIMReady() {
   String r;
-  if (!at->sendSync("AT+CPIN?", r)) return false;
+  if (!at->sendSync("AT+CPIN?", r))
+    return false;
   return r.indexOf("READY") != -1;
 }
 
@@ -65,7 +66,8 @@ bool AsyncEG915U::disalbeSleepMode() { return at->sendSync("AT+QSCLK=0"); }
 
 bool AsyncEG915U::checkNetworkContext() {
   String r;
-  if (!at->sendSync("AT+QIACT?", r)) return false;
+  if (!at->sendSync("AT+QIACT?", r))
+    return false;
   return r.indexOf("+QIACT: 1,1") != -1;
 }
 
@@ -191,7 +193,8 @@ bool AsyncEG915U::stop() { return at->sendSync("AT+QICLOSE=0"); }
 bool AsyncEG915U::connect(const char *host, uint16_t port) {
   String portStr(port);
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  at->sendSync(String("AT+QIOPEN=1,0,\"TCP\",\"") + host + "\"," + portStr + ",0,0");
+  at->sendSync(String("AT+QIOPEN=1,0,\"TCP\",\"") + host + "\"," + portStr +
+               ",0,0");
 
   for (int i = 0; i < 20; i++) {
     ConnectionStatus status = URCState.isConnected.load();

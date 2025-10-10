@@ -32,7 +32,8 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
 
   // Open ssl connection
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) + ",0");
+  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) +
+               ",0");
 
   for (int i = 0; i < 20; i++) {
     ConnectionStatus status = URCState.isConnected.load();

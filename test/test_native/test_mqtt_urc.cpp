@@ -8,11 +8,13 @@
 
 using ::testing::NiceMock;
 
-static void startMqttCfgResponder(NiceMock<MockStream> *s, std::atomic<bool> *done,
+static void startMqttCfgResponder(NiceMock<MockStream> *s,
+                                  std::atomic<bool> *done,
                                   std::string *capture = nullptr) {
   auto responder = [](void *pv) {
-    auto *ctx = static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
-                                      std::string *> *>(pv);
+    auto *ctx =
+        static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
+                               std::string *> *>(pv);
     auto *s = std::get<0>(*ctx);
     auto *done = std::get<1>(*ctx);
     auto *cap = std::get<2>(*ctx);
@@ -21,10 +23,12 @@ static void startMqttCfgResponder(NiceMock<MockStream> *s, std::atomic<bool> *do
     TickType_t start = xTaskGetTickCount();
     const TickType_t maxTicks = pdMS_TO_TICKS(10000);
     while (!done->load()) {
-      if ((xTaskGetTickCount() - start) > maxTicks) break;
+      if ((xTaskGetTickCount() - start) > maxTicks)
+        break;
 
       std::string chunk = DrainTx(s);
-      if (!chunk.empty()) acc += chunk;
+      if (!chunk.empty())
+        acc += chunk;
 
       size_t pos;
       while ((pos = acc.find("\r\n")) != std::string::npos) {
@@ -57,8 +61,8 @@ static void startMqttCfgResponder(NiceMock<MockStream> *s, std::atomic<bool> *do
     delete ctx;
     vTaskDelete(nullptr);
   };
-  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, std::string *>(
-      s, done, capture);
+  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
+                             std::string *>(s, done, capture);
   xTaskCreate(responder, "MQTT_CFG_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
               nullptr);
 }
@@ -131,7 +135,8 @@ TEST_F(MqttURCTest, QMTRECV_WithTopicPayload_QueuesAndCallback) {
         mqtt.setCallback([&](char *topic, uint8_t *payload, unsigned int len) {
           called = true;
           gotTopic = String(topic);
-          gotPayload = String(reinterpret_cast<char *>(payload)).substring(0, len);
+          gotPayload =
+              String(reinterpret_cast<char *>(payload)).substring(0, len);
         });
 
         // Inject a QMTRECV with topic and payload
@@ -163,7 +168,8 @@ TEST_F(MqttURCTest, QMTSTAT_SetsDisconnected) {
         gsm->modem.URCState.mqttState.store(MqttConnectionState::CONNECTED);
         InjectRx(mock, "\r\n+QMTSTAT: 1,2\r\n");
         vTaskDelay(pdMS_TO_TICKS(20));
-        EXPECT_EQ(gsm->modem.URCState.mqttState.load(), MqttConnectionState::DISCONNECTED);
+        EXPECT_EQ(gsm->modem.URCState.mqttState.load(),
+                  MqttConnectionState::DISCONNECTED);
       },
       "MQTT_QMTSTAT", 8192, 3, 3000);
   EXPECT_TRUE(ok);
