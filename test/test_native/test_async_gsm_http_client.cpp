@@ -73,7 +73,7 @@ TEST_F(HttpClientUsageTest, GetRequestReturnsBody) {
         EXPECT_EQ(body, String("hello"));
 
         done = true;
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(120));
       },
       "HttpClientGET", 8192, 3, 8000);
   EXPECT_TRUE(ok);
@@ -91,7 +91,7 @@ TEST_F(HttpClientUsageTest, ConnectFailurePropagatesToHttpClient) {
         EXPECT_LT(status, 0); // HttpClient should report an error
 
         done = true;
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(120));
       },
       "HttpClientFail", 8192, 3, 5000);
   EXPECT_TRUE(ok);
@@ -133,7 +133,7 @@ TEST_F(HttpClientUsageTest, SendsRequestAndReadsResponse) {
         EXPECT_EQ(body, String("hello"));
 
         done = true;
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(120));
       },
       "HttpSendRead", 8192, 3, 8000);
   EXPECT_TRUE(ok);

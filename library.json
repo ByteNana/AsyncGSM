@@ -17,6 +17,6 @@
     ]
   },
   "dependencies": {
-    "Bytenana/AsyncATHandler": "https://github.com/ByteNana/AsyncATHandler.git#dev"
+    "Bytenana/AsyncATHandler": "https://github.com/ByteNana/AsyncATHandler.git#rc-0.1.1"
   }
 }

@@ -14,7 +14,20 @@ private:
   std::deque<uint8_t> *rxBuffer;
   SemaphoreHandle_t rxMutex = nullptr;
 
-  void handleURC(const String &urc);
+  // Dynamic URC registration helpers
+  void registerURCs();
+  void unregisterURCs();
+  std::vector<String> registeredURCPatterns;
+
+  // Per-URC callbacks
+  void onRegChanged(const String &urc);
+  void onOpenResult(const String &urc);
+  void onClosed(const String &urc);
+  void onTcpRecv(const String &urc);
+  void onSslRecv(const String &urc);
+  void onReadData(const String &urc);
+  void onMqttRecv(const String &urc);
+  void onMqttStat(const String &urc);
   void lockRx() { xSemaphoreTake(rxMutex, portMAX_DELAY); }
   void unlockRx() { xSemaphoreGive(rxMutex); }
 

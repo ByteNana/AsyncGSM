@@ -5,6 +5,7 @@ AsyncEG915U::AsyncEG915U() {}
 
 AsyncEG915U::~AsyncEG915U() {
   if (at) {
+    // Reader task will be stopped by end(); URC handlers are ephemeral
     at->end();
   }
 }
@@ -15,8 +16,8 @@ bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
   _stream = &stream;
   rxBuffer = &rxBuf;
   rxMutex = mutex;
-  // Register our URC handler
-  at->onURC([this](const String &urc) { this->handleURC(urc); });
+  // Register dynamic URC handlers
+  registerURCs();
   return true;
 }
 

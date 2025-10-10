@@ -118,7 +118,7 @@ TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
 
         bool res = gsm->modem.gprsConnect("apn", "user", "pwd");
         done = true;
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);
       },
       "GprsConnectOK", 8192, 2, 8000);
@@ -136,7 +136,7 @@ TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNOnly) {
 
         bool res = gsm->modem.gprsConnect("apn");
         done = true;
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);
       },
       "GprsConnectAPNOnly", 8192, 2, 8000);
