@@ -2,33 +2,24 @@
 #include "esp_log.h"
 
 bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
-  // Enable SSL TSL 1.2
-  ATPromise *sslPromise = at->sendCommand("AT+QSSLCFG=\"sslversion\",1,3");
-  if (!sslPromise->wait()) {
+  // Enable SSL TLS 1.2
+  if (!at->sendSync("AT+QSSLCFG=\"sslversion\",1,3")) {
     log_e("Failed to set SSL version");
-    at->popCompletedPromise(sslPromise->getId());
     return false;
   }
-  at->popCompletedPromise(sslPromise->getId());
 
   // Create SSL context - TLS_RSA_WITH_AES_256_CBC_SHA
-  sslPromise = at->sendCommand("AT+QSSLCFG=\"ciphersuite\",1,0X0035");
-  if (!sslPromise->wait()) {
+  if (!at->sendSync("AT+QSSLCFG=\"ciphersuite\",1,0X0035")) {
     log_e("Failed to set SSL cipher suite");
-    at->popCompletedPromise(sslPromise->getId());
     return false;
   }
 
   // Set security level to 0 (Insecure for now)
   // TODO: Change to 1 after implementing certificate handling
-  at->popCompletedPromise(sslPromise->getId());
-  sslPromise = at->sendCommand("AT+QSSLCFG=\"seclevel\",1,0");
-  if (!sslPromise->wait()) {
+  if (!at->sendSync("AT+QSSLCFG=\"seclevel\",1,0")) {
     log_e("Failed to set SSL security level");
-    at->popCompletedPromise(sslPromise->getId());
     return false;
   }
-  at->popCompletedPromise(sslPromise->getId());
 
   log_w("TODO: Implement certificate handling");
   // Set the certificate if available
@@ -41,14 +32,8 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
 
   // Open ssl connection
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  sslPromise = at->sendCommand(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," +
-                               String(port) + ",0");
-  if (!sslPromise->wait()) {
-    log_e("Failed to open SSL connection");
-    at->popCompletedPromise(sslPromise->getId());
-    return false;
-  }
-  at->popCompletedPromise(sslPromise->getId());
+  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) +
+               ",0");
 
   for (int i = 0; i < 20; i++) {
     ConnectionStatus status = URCState.isConnected.load();
@@ -68,13 +53,10 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
 }
 
 bool AsyncEG915U::stopSecure() {
-  ATPromise *promise = at->sendCommand("AT+QSSLCLOSE=0");
-  if (!promise->wait()) {
+  if (!at->sendSync("AT+QSSLCLOSE=0")) {
     log_e("Failed to close SSL connection or already closed");
-    at->popCompletedPromise(promise->getId());
     return false;
   }
-  at->popCompletedPromise(promise->getId());
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
   return true;
 }

@@ -11,58 +11,39 @@ bool AsyncMqttGSM::init(AsyncEG915U &modem, AsyncATHandler &atHandler) {
   this->at = &atHandler;
   this->modem->mqttQueueSub = &mqttQueueSub;
 
-  ATPromise *mqttPromise =
-      at->sendCommand("AT+QMTCFG=\"recv/mode\"," + cidx + ",1");
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"recv/mode\"," + cidx + ",1")) {
     log_e("Failed to set Receive mode");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
 
-  mqttPromise = at->sendCommand("AT+QMTCFG=\"version\"," + cidx + ",4");
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"version\"," + cidx + ",4")) {
     log_e("Failed to set MQTT version");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
 
   // Set PDP context ID to 1
-  mqttPromise = at->sendCommand("AT+QMTCFG=\"pdpcid\"," + cidx);
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"pdpcid\"," + cidx)) {
     log_e("Failed to set PDP context ID");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
 
   // Set keepalive to 60 seconds
-  mqttPromise = at->sendCommand("AT+QMTCFG=\"keepalive\"," + cidx + ",120");
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"keepalive\"," + cidx + ",120")) {
     log_e("Failed to set keepalive");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
 
   // Set clean session to 1 (true)
-  mqttPromise = at->sendCommand("AT+QMTCFG=\"session\"," + cidx + ",0");
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"session\"," + cidx + ",0")) {
     log_e("Failed to set session");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
 
   // Set command timeout to 5 seconds, 3 retries, no exponential backoff
-  mqttPromise = at->sendCommand("AT+QMTCFG=\"timeout\"," + cidx + ",5,3,0");
-  if (!mqttPromise->wait()) {
+  if (!at->sendSync("AT+QMTCFG=\"timeout\"," + cidx + ",5,3,0")) {
     log_e("Failed to set timeout");
-    at->popCompletedPromise(mqttPromise->getId());
     return false;
   }
-  at->popCompletedPromise(mqttPromise->getId());
   return true;
 }
 
