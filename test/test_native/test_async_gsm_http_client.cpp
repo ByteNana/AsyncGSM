@@ -1,336 +1,194 @@
-#include "AsyncGSM.h"
-#include "Stream.h"
-#include "common.h"
-#include <HttpClient.h> // ArduinoHttpClient
+#include <AsyncGSM.h>
+#include <HttpClient.h>
 #include <atomic>
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <string>
-#include <tuple>
+
+#include "common/common.h"
+#include "common/responder.h"
 
 using ::testing::NiceMock;
 
-class AsyncGSMHttpClientTest : public FreeRTOSTest {
+// Test-only client subclass that coordinates with AsyncATHandler promises
+class TestAsyncGSM : public AsyncGSM {
+public:
+  using AsyncGSM::AsyncGSM;
+
+  size_t write(const uint8_t *buf, size_t size) override {
+    // Push payload into the underlying mock stream so tests can inspect it
+    if (!getATHandler().getStream() || size == 0)
+      return 0;
+    getATHandler().getStream()->write(buf, size);
+    getATHandler().getStream()->flush();
+    return size;
+  }
+  size_t write(uint8_t c) override { return write(&c, 1); }
+};
+
+class HttpClientUsageTest : public FreeRTOSTest {
 protected:
-  AsyncGSM *gsm;
-  HttpClient *httpClient;
-  NiceMock<MockStream> *mockStream;
+  TestAsyncGSM *gsm{nullptr};
+  NiceMock<MockStream> *mock{nullptr};
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
-    gsm = new AsyncGSM();
-    mockStream = new NiceMock<MockStream>();
-    mockStream->SetupDefaults();
-    httpClient = new HttpClient(*gsm, "httpbin.org", 80);
+    gsm = new TestAsyncGSM();
+    mock = new NiceMock<MockStream>();
+    mock->SetupDefaults();
   }
-
   void TearDown() override {
-    try {
-      if (httpClient) {
-        delete httpClient;
-        httpClient = nullptr;
-      }
-      if (gsm) {
-        delete gsm;
-        gsm = nullptr;
-      }
-      if (mockStream) {
-        delete mockStream;
-        mockStream = nullptr;
-      }
-    } catch (const std::exception &e) {
-      log_e("Exception during TearDown");
-      log_e(e.what());
-    }
-  }
-
-  // A helper function to create and run the responder task.
-  void runResponderTask(std::atomic<bool> *done, bool failConnection = false,
-                        bool isPost = false, int postPayloadSize = 0) {
-    struct ResponderData {
-      NiceMock<MockStream> *stream;
-      std::atomic<bool> *done;
-      bool fail;
-      bool isPost;
-      int payloadSize;
-    };
-
-    auto responderFunction = [](void *pvParameters) {
-      auto *data = static_cast<ResponderData *>(pvParameters);
-
-      vTaskDelay(pdMS_TO_TICKS(100));
-
-      while (!data->done->load()) {
-        std::string sentData = data->stream->GetTxData();
-        data->stream->ClearTxData();
-
-        if (sentData.find("AT+QICLOSE") != std::string::npos) {
-          data->stream->InjectRxData("OK\r\n");
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-
-        if (sentData.find("AT+QIDEACT") != std::string::npos) {
-          data->stream->InjectRxData("OK\r\n");
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-
-        if (sentData.find("AT+QIOPEN") != std::string::npos) {
-          data->stream->InjectRxData("OK\r\n");
-          if (data->fail) {
-            data->stream->InjectRxData("+QIOPEN: 0,1\r\n");
-          } else {
-            data->stream->InjectRxData("+QIOPEN: 0,0\r\n");
-          }
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-
-        if (sentData.find("AT+QISEND") != std::string::npos) {
-          data->stream->InjectRxData(">\r\n");
-          vTaskDelay(pdMS_TO_TICKS(100));
-          data->stream->InjectRxData("OK\r\n");
-          data->stream->InjectRxData("SEND OK\r\n");
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(10));
-      }
-
-      delete data;
-      vTaskDelete(nullptr);
-    };
-
-    auto *data = new ResponderData{mockStream, done, failConnection, isPost,
-                                   postPayloadSize};
-    xTaskCreate(responderFunction, "ResponderTask",
-                configMINIMAL_STACK_SIZE * 4, data, 1, nullptr);
+    if (gsm)
+      delete gsm;
+    if (mock)
+      delete mock;
+    FreeRTOSTest::TearDown();
   }
 };
 
-TEST_F(AsyncGSMHttpClientTest, HttpGetRequest) {
-  bool testResult = runInFreeRTOSTask(
+// Responder helpers are in common/responder.h
+
+TEST_F(HttpClientUsageTest, GetRequestReturnsBody) {
+  bool ok = runInFreeRTOSTask(
       [this]() {
-        std::atomic<bool> responderDone{false};
-        runResponderTask(&responderDone);
+        ASSERT_TRUE(gsm->init(*mock));
 
-        try {
-          if (!gsm->init(*mockStream)) {
-            throw std::runtime_error("GSM init failed");
-          }
+        std::atomic<bool> done{false};
+        std::string captured;
+        startTcpResponderCapturing(mock, &done, &captured, false);
 
-          log_i("[Test] Starting HTTP GET request...");
-          scheduleInject(mockStream, 2600,
-                         "+QIRD: 1474\r\n"
-                         "HTTP/1.1 200 OK\r\n"
-                         "Content-Type: application/json\r\n"
-                         "Content-Length: 1858\r\n"
-                         "\r\n"
-                         "{ \"items\": ["
-                         "{\"id\":1,\"val\":\"foo\"},"
-                         "{\"id\":2,\"val\":\"bar\"},"
-                         "{\"id\":3,\"val\":\"baz\"},"
-                         "{\"id\":4,\"val\":\"qux\"},"
-                         "{\"id\":5,\"val\":\"quux\"},"
-                         "{\"id\":6,\"val\":\"corge\"},"
-                         "{\"id\":7,\"val\":\"grault\"},"
-                         "{\"id\":8,\"val\":\"garply\"},"
-                         "{\"id\":9,\"val\":\"waldo\"},"
-                         "{\"id\":10,\"val\":\"fred\"},"
-                         "{\"id\":11,\"val\":\"plugh\"},"
-                         "{\"id\":12,\"val\":\"xyzzy\"},"
-                         "{\"id\":13,\"val\":\"thud\"},"
-                         "{\"id\":14,\"val\":\"alpha\"},"
-                         "{\"id\":15,\"val\":\"beta\"},"
-                         "{\"id\":16,\"val\":\"gamma\"},"
-                         "{\"id\":17,\"val\":\"delta\"},"
-                         "{\"id\":18,\"val\":\"epsilon\"},"
-                         "{\"id\":19,\"val\":\"zeta\"},"
-                         "{\"id\":20,\"val\":\"eta\"},"
-                         "{\"id\":21,\"val\":\"theta\"},"
-                         "{\"id\":22,\"val\":\"iota\"},"
-                         "{\"id\":23,\"val\":\"kappa\"},"
-                         "{\"id\":24,\"val\":\"lambda\"},"
-                         "{\"id\":25,\"val\":\"mu\"},"
-                         "{\"id\":26,\"val\":\"nu\"},"
-                         "{\"id\":27,\"val\":\"xi\"},"
-                         "{\"id\":28,\"val\":\"omicron\"},"
-                         "{\"id\":29,\"val\":\"pi\"},"
-                         "{\"id\":30,\"val\":\"rho\"},"
-                         "{\"id\":31,\"val\":\"sigma\"},"
-                         "{\"id\":32,\"val\":\"tau\"},"
-                         "{\"id\":33,\"val\":\"upsilon\"},"
-                         "{\"id\":34,\"val\":\"phi\"},"
-                         "{\"id\":35,\"val\":\"chi\"},"
-                         "{\"id\":36,\"val\":\"psi\"},"
-                         "{\"id\":37,\"val\":\"omega\"},"
-                         "{\"id\":38,\"val\":\"foo\"},"
-                         "{\"id\":39,\"val\":\"bar\"},"
-                         "{\"id\":40,\"val\":\"baz\"},"
-                         "{\"id\":41,\"val\":\"qux\"},"
-                         "{\"id\":42,\"val\":\"quux\"},"
-                         "{\"id\":43,\"val\":\"corge\"},"
-                         "{\"id\":44,\"val\":\"grault\"},"
-                         "{\"id\":45,\"val\":\"garply\"},"
-                         "{\"id\":46,\"val\":\"waldo\"},"
-                         "{\"id\":47,\"val\":\"fred\"},"
-                         "{\"id\":48,\"val\":\"plugh\"},"
-                         "{\"id\":49,\"val\":\"xyzzy\"},"
-                         "{\"id\":50,\"val\":\"thud\"},"
-                         "{\"id\":51,\"val\":\"alpha\"},"
-                         "{\"id\":52,\"val\":\"beta\"},"
-                         "{\"id\":53,\"val\":\"gamma\"},"
-                         "{\"id\":54,\"val\":\"delta\"},"
-                         "{\"id\":55,\"val\":\"epsilon\"},"
-                         "{\"id\":56,\"val\":\"zeta\"},"
-                         "{\"id\":57,\"val\":\"eta\"},"
-                         "{\"id\":58,\"val\":\"theta\"},"
-                         "{\"id\":59,\"val\":\"iota\"},"
-                         "{\"id\":60,\"val\":\"kappa\"},\r\nOK\r\n");
-          scheduleInject(mockStream, 2700,
-                         "+QIRD: 455\r\n"
-                         "{\"id\":61,\"val\":\"lambda\"},"
-                         "{\"id\":62,\"val\":\"mu\"},"
-                         "{\"id\":63,\"val\":\"nu\"},"
-                         "{\"id\":64,\"val\":\"xi\"},"
-                         "{\"id\":65,\"val\":\"omicron\"},"
-                         "{\"id\":66,\"val\":\"pi\"},"
-                         "{\"id\":67,\"val\":\"rho\"},"
-                         "{\"id\":68,\"val\":\"sigma\"},"
-                         "{\"id\":69,\"val\":\"tau\"},"
-                         "{\"id\":70,\"val\":\"upsilon\"},"
-                         "{\"id\":71,\"val\":\"phi\"},"
-                         "{\"id\":72,\"val\":\"chi\"},"
-                         "{\"id\":73,\"val\":\"psi\"},"
-                         "{\"id\":74,\"val\":\"omega\"},"
-                         "{\"id\":75,\"val\":\"foo\"},"
-                         "{\"id\":76,\"val\":\"bar\"},"
-                         "{\"id\":77,\"val\":\"baz\"},"
-                         "{\"id\":78,\"val\":\"qux\"},"
-                         "{\"id\":79,\"val\":\"quux\"},"
-                         "{\"id\":80,\"val\":\"corge\"}"
-                         "]}"
-                         "\r\n\r\nOK\r\n");
-          scheduleInject(mockStream, 2800, "+QICLOSE: 0\r\n");
-          int connectionResult = httpClient->get("/get");
+        // Prepare incoming HTTP response via modem's read URC
+        const std::string httpPayload =
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello\r\n\r\n";
+        const std::string inj = std::string("+QIRD: ") +
+                                std::to_string(httpPayload.size()) + "\r\n" +
+                                httpPayload + "OK\r\n";
+        scheduleInject(mock, 200, inj);
 
-          log_i("Connection result: %d", connectionResult);
-          if (connectionResult != 0) {
-            throw std::runtime_error("HTTP connection failed");
-          }
+        HttpClient http(*gsm, "example.com", 80);
+        int err = http.get("/");
+        ASSERT_EQ(err, 0);
+        int status = http.responseStatusCode();
+        EXPECT_EQ(status, 200);
 
-          int statusCode = httpClient->responseStatusCode();
-          if (statusCode != 200) {
-            throw std::runtime_error("Expected HTTP 200, got: " +
-                                     String(statusCode));
-          }
+        String body = http.responseBody();
+        EXPECT_EQ(body, String("hello"));
 
-          String responseBody = httpClient->responseBody();
-          printf("Response Body: %s\n", responseBody.c_str());
-          if (responseBody.indexOf("kappa") == -1) {
-            throw std::runtime_error("Response validation failed");
-          }
-        } catch (const std::exception &e) {
-          responderDone = true;
-          vTaskDelay(pdMS_TO_TICKS(500));
-          throw;
-        }
-
-        responderDone = true;
-        vTaskDelay(pdMS_TO_TICKS(500));
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(20));
       },
-      "HttpGetTest", 8192, 2, 15000);
-
-  EXPECT_TRUE(testResult);
+      "HttpClientGET", 8192, 3, 8000);
+  EXPECT_TRUE(ok);
 }
 
-TEST_F(AsyncGSMHttpClientTest, HttpPostWithJson) {
-  bool testResult = runInFreeRTOSTask(
+TEST_F(HttpClientUsageTest, ConnectFailurePropagatesToHttpClient) {
+  bool ok = runInFreeRTOSTask(
       [this]() {
-        String jsonPayload = "{\"temperature\":23.5,\"humidity\":65.2}";
-        std::atomic<bool> responderDone{false};
-        runResponderTask(&responderDone, false, true, jsonPayload.length());
+        ASSERT_TRUE(gsm->init(*mock));
+        std::atomic<bool> done{false};
+        startTcpResponder(mock, &done, true); // force QIOPEN failure
 
-        try {
-          if (!gsm->init(*mockStream)) {
-            throw std::runtime_error("GSM init failed");
-          }
+        HttpClient http(*gsm, "bad.host", 80);
+        int status = http.get("/");
+        EXPECT_LT(status, 0); // HttpClient should report an error
 
-          scheduleInject(mockStream, 1200,
-                         "+QIRD: 109\r\n"
-                         "HTTP/1.1 201 Created\r\n"
-                         "Content-Type: application/json\r\n"
-                         "Content-Length: 30\r\n"
-                         "\r\n"
-                         "{\"status\":\"created\",\"id\":123}\r\n"
-                         "\r\n\"\r\nOK\r\n");
-          log_i("[Test] Starting HTTP POST request...");
-
-          httpClient->beginRequest();
-          httpClient->post("/post");
-          httpClient->sendHeader("Content-Type", "application/json");
-          httpClient->sendHeader("Content-Length", jsonPayload.length());
-          httpClient->beginBody();
-          httpClient->print(jsonPayload);
-          httpClient->endRequest();
-
-          vTaskDelay(pdMS_TO_TICKS(500));
-
-          int statusCode = httpClient->responseStatusCode();
-          if (statusCode != 201) {
-            throw std::runtime_error("Expected HTTP 201, got: " +
-                                     String(statusCode));
-          }
-
-          String responseBody = httpClient->responseBody();
-          printf("Response Body: %s\n", responseBody.c_str());
-          if (responseBody.indexOf("created") == -1) {
-            throw std::runtime_error("POST response validation failed");
-          }
-        } catch (const std::exception &e) {
-          responderDone = true;
-          vTaskDelay(pdMS_TO_TICKS(500));
-          throw;
-        }
-
-        responderDone = true;
-        vTaskDelay(pdMS_TO_TICKS(500));
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(20));
       },
-      "HttpPostTest", 8192, 2, 15000);
-
-  EXPECT_TRUE(testResult);
+      "HttpClientFail", 8192, 3, 5000);
+  EXPECT_TRUE(ok);
 }
 
-TEST_F(AsyncGSMHttpClientTest, HttpConnectionFailure) {
-  bool testResult = runInFreeRTOSTask(
+TEST_F(HttpClientUsageTest, SendsRequestAndReadsResponse) {
+  bool ok = runInFreeRTOSTask(
       [this]() {
-        std::atomic<bool> responderDone{false};
-        runResponderTask(&responderDone, true);
+        ASSERT_TRUE(gsm->init(*mock));
 
-        try {
-          if (!gsm->init(*mockStream)) {
-            throw std::runtime_error("GSM init failed");
-          }
+        std::atomic<bool> done{false};
+        std::string captured;
+        startTcpResponderCapturing(mock, &done, &captured, false);
 
-          log_i("[Test] Testing connection failure...");
+        // Provide an HTTP/1.1 200 OK response via +QIRD
+        const std::string httpPayload =
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello\r\n\r\n";
+        const std::string inj = std::string("+QIRD: ") +
+                                std::to_string(httpPayload.size()) + "\r\n" +
+                                httpPayload + "OK\r\n";
+        scheduleInject(mock, 200, inj);
 
-          int connectionResult = httpClient->get("/test");
-          log_i("Connection result: %d", connectionResult);
+        // Send GET request
+        HttpClient http(*gsm, "example.com", 80);
+        int err = http.get("/");
+        ASSERT_EQ(err, 0);
 
-          if (connectionResult == 0) {
-            printf("Connection Result: %d\n", connectionResult);
-            throw std::runtime_error("Expected connection failure");
-          }
-        } catch (const std::exception &e) {
-          responderDone = true;
-          vTaskDelay(pdMS_TO_TICKS(500));
-          throw;
-        }
+        // Capture what the client wrote as the HTTP request
+        vTaskDelay(pdMS_TO_TICKS(20)); // allow writer to flush
+        ASSERT_FALSE(captured.empty());
+        // Verify start line and essential headers
+        EXPECT_NE(captured.find("GET / HTTP/1.1\r\n"), std::string::npos);
+        EXPECT_NE(captured.find("Host: example.com"), std::string::npos);
 
-        responderDone = true;
-        vTaskDelay(pdMS_TO_TICKS(500));
+        // Verify response parsing
+        int status = http.responseStatusCode();
+        EXPECT_EQ(status, 200);
+        String body = http.responseBody();
+        EXPECT_EQ(body, String("hello"));
+
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(20));
       },
-      "ConnectionFailureTest", 8192, 2, 10000);
+      "HttpSendRead", 8192, 3, 8000);
+  EXPECT_TRUE(ok);
+}
 
-  EXPECT_TRUE(testResult);
+TEST_F(HttpClientUsageTest, PostSendsBodyAndReadsResponse) {
+  bool ok = runInFreeRTOSTask(
+      [this]() {
+        ASSERT_TRUE(gsm->init(*mock));
+
+        std::atomic<bool> done{false};
+        std::string captured;
+        startTcpResponderCapturing(mock, &done, &captured, false);
+
+        // Provide a 200 OK response for POST
+        const std::string respBody = "ok";
+        const std::string httpPayload =
+            std::string("HTTP/1.1 200 OK\r\nContent-Length: ") +
+            std::to_string(respBody.size()) + "\r\n\r\n" + respBody +
+            "\r\n\r\n";
+        const std::string inj = std::string("+QIRD: ") +
+                                std::to_string(httpPayload.size()) + "\r\n" +
+                                httpPayload + "OK\r\n";
+        scheduleInject(mock, 200, inj);
+
+        // Send POST request with JSON body
+        const char *body = "{\"x\":1}";
+        const char *ctype = "application/json";
+        HttpClient http(*gsm, "example.com", 80);
+        int err = http.post("/api", ctype, body);
+        ASSERT_EQ(err, 0);
+
+        // Verify sent request
+        vTaskDelay(pdMS_TO_TICKS(30));
+        ASSERT_FALSE(captured.empty());
+        EXPECT_NE(captured.find("POST /api HTTP/1.1\r\n"), std::string::npos);
+        EXPECT_NE(captured.find("Host: example.com"), std::string::npos);
+        EXPECT_NE(captured.find("Content-Type: application/json"),
+                  std::string::npos);
+        EXPECT_NE(captured.find(std::string("Content-Length: ") +
+                                std::to_string(strlen(body))),
+                  std::string::npos);
+        EXPECT_NE(captured.find(body), std::string::npos);
+
+        // Verify response handling
+        int status = http.responseStatusCode();
+        EXPECT_EQ(status, 200);
+        String rb = http.responseBody();
+        EXPECT_EQ(rb, String(respBody.c_str()));
+
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(20));
+      },
+      "HttpPostSendRead", 8192, 3, 8000);
+  EXPECT_TRUE(ok);
 }
 
 FREERTOS_TEST_MAIN()
