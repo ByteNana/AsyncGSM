@@ -6,12 +6,12 @@
 #include "freertos/FreeRTOS.h"
 #include <atomic>
 #include <chrono>
-#include <functional>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
+#include <functional>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <mutex>
+#include <thread>
 
 class GlobalSchedulerEnvironment : public ::testing::Environment {
 private:
@@ -46,9 +46,8 @@ public:
     // Wait (bounded) until the scheduler thread reports running=true
     {
       std::unique_lock<std::mutex> lk(schedMutex);
-      schedCv.wait_for(lk, std::chrono::milliseconds(2000), [] {
-        return globalSchedulerRunning.load();
-      });
+      schedCv.wait_for(lk, std::chrono::milliseconds(2000),
+                       [] { return globalSchedulerRunning.load(); });
     }
     // Small grace period to let timers/idle task spin up
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -59,9 +58,8 @@ public:
       // Wait (bounded) for the scheduler thread to acknowledge shutdown
       {
         std::unique_lock<std::mutex> lk(schedMutex);
-        schedCv.wait_for(lk, std::chrono::milliseconds(1000), [] {
-          return !globalSchedulerRunning.load();
-        });
+        schedCv.wait_for(lk, std::chrono::milliseconds(1000),
+                         [] { return !globalSchedulerRunning.load(); });
       }
       // Join if it finished in time; otherwise detach to avoid deadlock
       if (globalSchedulerRunning.load()) {
@@ -75,8 +73,10 @@ public:
 
 // Define static members
 inline std::thread GlobalSchedulerEnvironment::globalSchedulerThread;
-inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerStarted{false};
-inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerRunning{false};
+inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerStarted{
+    false};
+inline std::atomic<bool> GlobalSchedulerEnvironment::globalSchedulerRunning{
+    false};
 inline std::mutex GlobalSchedulerEnvironment::schedMutex;
 inline std::condition_variable GlobalSchedulerEnvironment::schedCv;
 
@@ -202,4 +202,3 @@ inline void InjectDataWithDelay(class MockStream *mockStream,
   xTaskCreate(injectorTask, "InjectorTask", configMINIMAL_STACK_SIZE * 2,
               injectorData, 1, &injectorHandle);
 }
-
