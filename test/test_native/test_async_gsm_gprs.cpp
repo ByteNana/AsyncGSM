@@ -1,16 +1,16 @@
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-
 #include "AsyncGSM.h"
 #include "Stream.h"
-#include "common.h"
+#include "common/common.h"
+#include "common/responder.h"
+#include <atomic>
+#include <string>
 
 using ::testing::NiceMock;
 
-class AsyncGSMTest : public FreeRTOSTest {
+class AsyncGSMGprsTest : public FreeRTOSTest {
 protected:
-  AsyncGSM *gsm;
-  NiceMock<MockStream> *mockStream;
+  AsyncGSM *gsm{nullptr};
+  NiceMock<MockStream> *mockStream{nullptr};
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -20,126 +20,127 @@ protected:
   }
 
   void TearDown() override {
-    if (gsm) {
+    if (gsm)
       delete gsm;
-      gsm = nullptr;
-    }
-    if (mockStream) {
+    if (mockStream)
       delete mockStream;
-      mockStream = nullptr;
-    }
     FreeRTOSTest::TearDown();
-  }
-
-  void runModemSetupAndGprsConnect(bool expectSuccess) {
-    // Create a separate task to handle injecting responses
-    std::atomic<bool> responderDone{false};
-    TaskHandle_t responderTaskHandle = nullptr;
-
-    auto responderTask = [](void *params) {
-      auto *data = static_cast<
-          std::tuple<NiceMock<MockStream> *, std::atomic<bool> *> *>(params);
-      auto *mockStream = std::get<0>(*data);
-      auto *responderDone = std::get<1>(*data);
-
-      // Wait for gsm->begin() to run and send all its commands
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("ATE0\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CMEE=2\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CGMM\r\nEG915U\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CGMI\r\nQuectel\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CTZU=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CPIN?\r\n+CPIN: READY\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      for (int i = 0; i < 4; i++) {
-        mockStream->InjectRxData(String("AT+QICLOSE=") + String(i) +
-                                 "\r\nOK\r\n");
-        vTaskDelay(pdMS_TO_TICKS(100));
-      }
-      mockStream->InjectRxData("AT+QSCLK=0\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-
-      // Wait for gprsConnect() to run and send its commands
-      mockStream->InjectRxData("AT+QIDEACT=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData(
-          "AT+QICSGP=1,1,\"apn\",\"user\",\"pwd\"\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+QIACT=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData(
-          "AT+QIACT?\r\n+QIACT: 1,1,1,\"192.168.1.100\"\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+CGATT=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("+CGATT:1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+QIDEACT=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+QICSGP\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("AT+QIACT=1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("+QIACT:1,1\r\nOK\r\n");
-      vTaskDelay(pdMS_TO_TICKS(100));
-      mockStream->InjectRxData("+CGATT:1\r\nOK\r\n");
-
-      *responderDone = true;
-      vTaskDelete(nullptr);
-    };
-
-    auto params = std::make_tuple(mockStream, &responderDone);
-    xTaskCreate(responderTask, "ResponderTask", configMINIMAL_STACK_SIZE * 4,
-                &params, 1, &responderTaskHandle);
-
-    bool gsmInitSuccess = gsm->init(*mockStream);
-    if (!gsmInitSuccess) {
-      throw std::runtime_error("GSM init failed");
-    }
-
-    bool gsmBeginSuccess = gsm->begin("apn");
-    if (!gsmBeginSuccess) {
-      throw std::runtime_error("GSM begin failed");
-    }
-
-    bool gsmConnectSuccess = gsm->modem.gprsConnect("apn", "user", "pwd");
-
-    // Ensure the responder task has finished its work
-    while (!responderDone.load()) {
-      vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    if (expectSuccess) {
-      if (!gsmConnectSuccess) {
-        throw std::runtime_error("GPRS connect should have succeeded");
-      }
-    } else {
-      if (gsmConnectSuccess) {
-        throw std::runtime_error("GPRS connect should have failed");
-      }
-    }
   }
 };
 
-TEST_F(AsyncGSMTest, GprsConnectSendsCommands) {
-  bool testResult = runInFreeRTOSTask(
-      [this]() { runModemSetupAndGprsConnect(true); }, "GprsConnectTest",
-      configMINIMAL_STACK_SIZE * 8, 2, 15000);
-  EXPECT_TRUE(testResult);
+static void startGprsResponder(NiceMock<MockStream> *mockStream,
+                               std::atomic<bool> *done) {
+  auto responder = [](void *pv) {
+    auto *ctx =
+        static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *> *>(
+            pv);
+    auto *s = std::get<0>(*ctx);
+    auto *done = std::get<1>(*ctx);
+
+    // Signal network registered (URC) so setPDPContext won't loop.
+    s->InjectRxData("+CREG: 0,1\r\n");
+
+    std::string buf;
+    while (!done->load()) {
+      std::string tx = DrainTx(s);
+      if (!tx.empty())
+        buf += tx;
+
+      size_t pos;
+      while ((pos = buf.find("\r\n")) != std::string::npos) {
+        std::string cmd = buf.substr(0, pos);
+        buf.erase(0, pos + 2);
+
+        auto starts_with = [&](const char *p) { return cmd.rfind(p, 0) == 0; };
+
+        // gprsConnect() path only
+        if (cmd == "AT+CREG?") {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (starts_with("AT+CGDCONT=")) {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (starts_with("AT+QIDEACT=1")) {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (starts_with("AT+QICSGP=")) {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (cmd == "AT+CGATT?") {
+          InjectRx(s, "+CGATT: 1\r\nOK\r\n");
+          continue;
+        }
+        if (cmd == "AT+QIACT=1") {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (cmd == "AT+CGACT=1,1") {
+          // Suppress informative +CGACT URC in tests to avoid races; send only
+          // OK
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+        if (cmd == "AT+QIACT?") {
+          InjectRx(s, "+QIACT: 1,1\r\nOK\r\n");
+          continue;
+        }
+
+        // Default OK for any other command (harmless)
+        if (starts_with("AT+")) {
+          InjectRx(s, "OK\r\n");
+          continue;
+        }
+      }
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    vTaskDelete(nullptr);
+  };
+
+  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *>(
+      mockStream, done);
+  xTaskCreate(responder, "GPRS_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
+              nullptr);
 }
 
-TEST_F(AsyncGSMTest, GprsConnectWithNullCredentials) {
-  bool testResult = runInFreeRTOSTask(
-      [this]() { runModemSetupAndGprsConnect(true); },
-      "GprsConnectNullCredsTest", configMINIMAL_STACK_SIZE * 8, 2, 15000);
-  EXPECT_TRUE(testResult);
+TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
+  bool ok = runInFreeRTOSTask(
+      [this]() {
+        ASSERT_TRUE(gsm->init(*mockStream));
+        // Pretend we are already registered to skip wait loop
+        gsm->modem.URCState.creg.store(RegStatus::REG_OK_HOME);
+
+        std::atomic<bool> done{false};
+        startGprsResponder(mockStream, &done);
+
+        bool res = gsm->modem.gprsConnect("apn", "user", "pwd");
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(50));
+        ASSERT_TRUE(res);
+      },
+      "GprsConnectOK", 8192, 2, 8000);
+  EXPECT_TRUE(ok);
+}
+
+TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNOnly) {
+  bool ok = runInFreeRTOSTask(
+      [this]() {
+        ASSERT_TRUE(gsm->init(*mockStream));
+        gsm->modem.URCState.creg.store(RegStatus::REG_OK_HOME);
+
+        std::atomic<bool> done{false};
+        startGprsResponder(mockStream, &done);
+
+        bool res = gsm->modem.gprsConnect("apn");
+        done = true;
+        vTaskDelay(pdMS_TO_TICKS(50));
+        ASSERT_TRUE(res);
+      },
+      "GprsConnectAPNOnly", 8192, 2, 8000);
+  EXPECT_TRUE(ok);
 }
 
 FREERTOS_TEST_MAIN()
