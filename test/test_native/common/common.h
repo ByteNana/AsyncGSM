@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FreeRTOSConfig.h"
+#include "freertos/FreeRTOSConfig.h"
 #include "Stream.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
