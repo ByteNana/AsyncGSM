@@ -6,7 +6,6 @@ add_compile_definitions(LOG_LEVEL=${LOG_LEVEL})
 enable_testing()
 
 set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-# set(MOCK_INC_DIR ${TEST_DIR}/mocks)
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
@@ -16,16 +15,10 @@ file(GLOB TEST_FILES CONFIGURE_DEPENDS
   ${TEST_DIR}/test_native/*.cpp
 )
 
-# file(GLOB TEST_MOCK_SOURCES CONFIGURE_DEPENDS
-#   ${MOCK_INC_DIR}/*.cpp
-#   ${MOCK_INC_DIR}/*.c
-# )
-
 foreach(TEST_FILE ${TEST_FILES})
   get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
   set(EXEC_NAME "${TEST_NAME}_test_exec")
 
-  # add_executable(${EXEC_NAME} ${TEST_FILE} ${TEST_MOCK_SOURCES})
   add_executable(${EXEC_NAME} ${TEST_FILE} )
 
   target_include_directories(${EXEC_NAME} PRIVATE
