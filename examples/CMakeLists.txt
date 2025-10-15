@@ -5,7 +5,6 @@
 # CMake can emit compile commands for clang tooling.
 
 # Common include dirs for examples (inherit public ones from AsyncGSM; add mocks)
-set(LOCAL_MOCKS_DIR ${CMAKE_CURRENT_LIST_DIR}/../test/mocks)
 
 # --- Unity ---
  FetchContent_Declare(
@@ -33,7 +32,6 @@ target_link_libraries(examples_index_objs
 
 target_include_directories(examples_index_objs PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../src
-  ${LOCAL_MOCKS_DIR}
   ${asyncathandler_SOURCE_DIR}/test/mocks
   ${gmock_SOURCE_DIR}/include
   ${gtest_SOURCE_DIR}/include

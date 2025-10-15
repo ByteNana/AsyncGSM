@@ -1,9 +1,9 @@
 #pragma once
 
-#include "FreeRTOSConfig.h"
 #include "Stream.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/FreeRTOSConfig.h"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
