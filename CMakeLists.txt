@@ -123,7 +123,7 @@ target_compile_definitions(AsyncATHandler PUBLIC LOG_LEVEL=${LOG_LEVEL})
 
 # === TESTS ===
 if(ASYNCGSM_BUILD_TESTS)
-  add_compile_definitions(LOG_LEVEL=${LOG_LEVEL} LOGGING=1)
+  add_compile_definitions(LOG_LEVEL=${LOG_LEVEL})
   enable_testing()
   add_subdirectory(test)
 endif()

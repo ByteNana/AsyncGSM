@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 
 # Build tests using AsyncATHandler's mocks and our local shims
 
-add_compile_definitions(LOG_LEVEL=${LOG_LEVEL} LOGGING=1)
+add_compile_definitions(LOG_LEVEL=${LOG_LEVEL})
 enable_testing()
 
 set(TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
