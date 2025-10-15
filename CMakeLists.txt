@@ -31,7 +31,7 @@ if(ASYNCGSM_BUILD_TESTS)
   FetchContent_Declare(
     ArduinoNativeMocks
     GIT_REPOSITORY https://github.com/Bytenana/ArduinoMock
-    GIT_TAG add-ipaddr-client-for-gsm
+    GIT_TAG rc-0.1.1
   )
   FetchContent_MakeAvailable(ArduinoNativeMocks)
 endif()
