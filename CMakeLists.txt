@@ -26,16 +26,6 @@ message(STATUS "🔧 Building with mock Arduino/FreeRTOS headers")
 include(FetchContent)
 cmake_policy(SET CMP0135 NEW)
 
-if(ASYNCGSM_BUILD_TESTS)
-  # --- ArduinoMock ---
-  FetchContent_Declare(
-    ArduinoNativeMocks
-    GIT_REPOSITORY https://github.com/Bytenana/ArduinoMock
-    GIT_TAG rc-0.1.1
-  )
-  FetchContent_MakeAvailable(ArduinoNativeMocks)
-endif()
-
 # --- AsyncATHandler ---
 # Disable AsyncATHandler's tests to avoid building them in AsyncGSM
 set(ASYNCAT_HANDLER_BUILD_TESTS OFF CACHE BOOL "Disable AsyncATHandler tests" FORCE)
@@ -43,7 +33,7 @@ set(ASYNCAT_HANDLER_BUILD_TESTS OFF CACHE BOOL "Disable AsyncATHandler tests" FO
 FetchContent_Declare(
   AsyncATHandler
   GIT_REPOSITORY https://github.com/ByteNana/AsyncATHandler
-  GIT_TAG add-arduno-mock-as-deps
+  GIT_TAG rc-0.1.1
 )
 FetchContent_MakeAvailable(AsyncATHandler)
 
