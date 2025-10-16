@@ -14,6 +14,7 @@ private:
   Stream *_stream = nullptr;
   GSMTransport *transport = nullptr;
   AsyncATHandler *at;
+  bool certConfigured = false;
 
   // Dynamic URC registration helpers
   void registerURCs();
@@ -53,7 +54,14 @@ public:
   bool connect(const char *host, uint16_t port);
   bool stop();
   bool connectSecure(const char *host, uint16_t port);
+  bool connectSecure(const char *host, uint16_t port, const char *caCertPath);
   bool stopSecure();
+
+  bool uploadUFSFile(const char *path, const uint8_t *data, size_t size,
+                     uint32_t timeoutMs = 120000);
+  bool setCACertificate(const char *ufsPath);
+  bool findUFSFile(const char *pattern, String *outName = nullptr,
+                   size_t *outSize = nullptr);
 
   // Helpers for GPRS connection
   void disableConnections();
