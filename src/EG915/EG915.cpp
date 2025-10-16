@@ -81,12 +81,12 @@ bool AsyncEG915U::gprsConnect(const char *apn, const char *user,
     return false;
   }
 
-  log_i("PDP context activated successfully");
+  log_d("PDP context activated successfully");
   if (!isGPRSSAttached()) {
     log_e("GPRS is not attached after PDP context activation");
     return false;
   }
-  log_i("GPRS is attached");
+  log_d("GPRS is attached");
   if (!at->sendSync("AT+QIACT=1")) {
     log_e("Failed to activate PDP context");
     return false;
@@ -104,9 +104,9 @@ bool AsyncEG915U::gprsConnect(const char *apn, const char *user,
 bool AsyncEG915U::gprsDisconnect() { return at->sendSync("AT+QIDEACT=1"); }
 
 bool AsyncEG915U::attachGPRS() {
-  log_i("Attaching GPRS...");
+  log_d("Attaching GPRS...");
   if (!isGPRSSAttached()) {
-    log_i("GPRS is not attached, trying to attach...");
+    log_d("GPRS is not attached, trying to attach...");
     if (!at->sendSync("AT+CGATT=1")) {
       log_e("Failed to attach GPRS");
       return false;
@@ -205,7 +205,7 @@ bool AsyncEG915U::connect(const char *host, uint16_t port) {
   }
 
   if (URCState.isConnected.load() == ConnectionStatus::CONNECTED) {
-    log_i("Connection URC received successfully");
+    log_d("Connection URC received successfully");
   } else {
     log_e("No +QIOPEN URC received or it indicated failure");
   }

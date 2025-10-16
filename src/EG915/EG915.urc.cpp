@@ -81,7 +81,7 @@ void AsyncEG915U::onRegChanged(const String &urc) {
     if (endPos != -1)
       statusStr = statusStr.substring(0, endPos);
     URCState.creg.store((RegStatus)statusStr.toInt());
-    log_i("URC: Registration status updated to %d", URCState.creg.load());
+    log_v("URC: Registration status updated to %d", URCState.creg.load());
   }
 }
 
@@ -100,7 +100,7 @@ void AsyncEG915U::onOpenResult(const String &urc) {
     int result = resultStr.toInt();
     if (result == 0) {
       URCState.isConnected.store(ConnectionStatus::CONNECTED);
-      log_i("URC: Connection opened successfully");
+      log_d("URC: Connection opened successfully");
     } else {
       URCState.isConnected.store(ConnectionStatus::FAILED);
       log_e("URC: Connection failed with error %d", result);
@@ -113,18 +113,18 @@ void AsyncEG915U::onClosed(const String & /*urc*/) {
   if (transport) {
     transport->reset();
   }
-  log_i("URC: Connection closed");
+  log_d("URC: Connection closed");
 }
 
 void AsyncEG915U::onTcpRecv(const String & /*urc*/) {
-  log_i("URC: Data received, ready to read with +QIRD");
+  log_d("URC: Data received, ready to read with +QIRD");
   if (transport) {
     transport->notifyDataReady(false);
   }
 }
 
 void AsyncEG915U::onSslRecv(const String & /*urc*/) {
-  log_i("URC: SSL Data received, ready to read with +QSSLRECV");
+  log_d("URC: SSL Data received, ready to read with +QSSLRECV");
   if (transport) {
     transport->notifyDataReady(true);
   }
@@ -187,7 +187,7 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
   }
   String msgId = afterFirstComma.substring(0, numEnd);
   msgId.trim();
-  log_i("URC: MQTT message for client %d on topic ID %d", clientId.toInt(),
+  log_d("URC: MQTT message for client %d on topic ID %d", clientId.toInt(),
         msgId.toInt());
   if (commaCount <= 1) {
     // QMTRECV=<client>,<msgid>
@@ -229,7 +229,7 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
     return;
   }
   String payload = urc.substring(payloadStart + 1, payloadEnd);
-  log_i("URC: Topic: '%s', Payload: '%s'", topic.c_str(), payload.c_str());
+  log_w("URC: Topic: '%s', Payload: '%s'", topic.c_str(), payload.c_str());
 
   MqttMessage msg;
   msg.topic = topic;
@@ -241,7 +241,7 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
   msg.length = msg.payload.size();
 
   if (mqttQueueSub->push(msg, pdMS_TO_TICKS(10))) {
-    log_i("URC: MQTT message queued, payload length %d", msg.length);
+    log_d("URC: MQTT message queued, payload length %d", msg.length);
   } else {
     log_e("URC: MQTT queue full - dropping message");
   }

@@ -12,7 +12,7 @@ AsyncGSM::~AsyncGSM() {
 }
 
 bool AsyncGSM::init(Stream &stream) {
-  log_i("Initializing AsyncGSM...");
+  log_d("Initializing AsyncGSM...");
   if (!at.begin(stream)) {
     log_e("Failed to initialize AsyncATHandler");
     return false;
@@ -62,7 +62,7 @@ bool AsyncGSM::begin(const char *apn) {
   while (true) {
     log_w("Waiting for SIM card...");
     if (modem.checkSIMReady()) {
-      log_i("SIM card is ready.");
+      log_d("SIM card is ready.");
       break;
     }
     delay(1000);
@@ -79,7 +79,7 @@ bool AsyncGSM::begin(const char *apn) {
 
   for (int i = 0; i < 10; ++i) {
     if (modem.isGPRSSAttached() && modem.checkNetworkContext()) {
-      log_i("GPRS is attached.");
+      log_d("GPRS is attached.");
       return true;
     }
     delay(500);
@@ -97,10 +97,9 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 }
 
 void AsyncGSM::stop() {
-  log_i("Stopping connection...");
   modemStop();
   transport.reset();
-  log_i("Connection stopped.");
+  log_d("Connection stopped.");
 }
 
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }

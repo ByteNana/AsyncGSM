@@ -45,7 +45,7 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
   }
 
   if (URCState.isConnected.load() == ConnectionStatus::CONNECTED) {
-    log_i("Connection URC received successfully");
+    log_d("Connection URC received successfully");
   } else {
     log_e("No +QIOPEN URC received or it indicated failure");
   }
