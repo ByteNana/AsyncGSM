@@ -5,10 +5,10 @@
 static String caMd5;
 
 bool AsyncSecureGSM::modemConnect(const char *host, uint16_t port) {
-  return modem.connectSecure(host, port);
+  return MODEM().connectSecure(host, port);
 }
 
-bool AsyncSecureGSM::modemStop() { return modem.stopSecure(); }
+bool AsyncSecureGSM::modemStop() { return MODEM().stopSecure(); }
 
 void AsyncSecureGSM::setCACert(const char *rootCA) {
   if (!rootCA || !*rootCA) {
@@ -29,13 +29,12 @@ void AsyncSecureGSM::setCACert(const char *rootCA) {
   const char *filename = newMd5.c_str();
   String foundName;
   size_t foundSize = 0;
-  bool exists = modem.findUFSFile(filename, &foundName, &foundSize);
+  bool exists = MODEM().findUFSFile(filename, &foundName, &foundSize);
   if (!exists) {
     log_d("Uploading CA cert to UFS as %s", filename);
-    modem.uploadUFSFile(filename, reinterpret_cast<const uint8_t *>(rootCA),
-                        strlen(rootCA));
+    MODEM().uploadUFSFile(filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA));
   }
   log_i("Configuring CA cert for SSL");
-  modem.setCACertificate(filename);
+  MODEM().setCACertificate(filename);
   caMd5 = newMd5;
 }

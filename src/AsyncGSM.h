@@ -6,11 +6,13 @@
 
 #include "EG915/EG915.h"
 #include "GSMTransport.h"
+#include "GSMContext/GSMContext.h"
 
 class AsyncGSM : public Client {
 private:
   SemaphoreHandle_t rxMutex = xSemaphoreCreateMutex();
   GSMTransport transport;
+  GSMContext *ctx = nullptr; // optional attached shared context
 
 public:
   AsyncEG915U modem;
@@ -20,6 +22,11 @@ public:
   ~AsyncGSM();
   virtual bool init(Stream &stream);
   bool begin(const char *apn = nullptr);
+  // Attach to a shared GSMContext (no ownership).
+  bool attach(GSMContext &context) {
+    ctx = &context;
+    return true;
+  }
   int connect(IPAddress ip, uint16_t port) override;
   int connect(const char *host, uint16_t port) override;
   size_t write(uint8_t c) override;
@@ -46,6 +53,10 @@ public:
   // helpers
   AsyncATHandler &getATHandler() { return at; }
   AsyncEG915U &getModem() { return modem; }
+  // When attached, prefer context-owned instances
+  AsyncATHandler &AT();
+  AsyncEG915U &MODEM();
+  GSMTransport &TRANSPORT();
 
 protected:
   bool ssl = false;

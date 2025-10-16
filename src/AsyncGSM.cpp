@@ -1,4 +1,5 @@
 #include "AsyncGSM.h"
+#include "GSMContext/GSMContext.h"
 #include "esp_log.h"
 #include <algorithm>
 #include <limits>
@@ -24,6 +25,11 @@ bool AsyncGSM::init(Stream &stream) {
   return true;
 }
 
+// Context-aware accessors
+AsyncATHandler &AsyncGSM::AT() { return ctx ? ctx->at() : at; }
+AsyncEG915U &AsyncGSM::MODEM() { return ctx ? ctx->modem() : modem; }
+GSMTransport &AsyncGSM::TRANSPORT() { return ctx ? ctx->transport() : transport; }
+
 RegStatus AsyncGSM::getRegistrationStatus() {
   return modem.URCState.creg.load();
 }
@@ -31,7 +37,7 @@ RegStatus AsyncGSM::getRegistrationStatus() {
 bool AsyncGSM::begin(const char *apn) {
   bool canCommunicate = false;
   for (int i = 0; i < 4; i++) {
-    if (at.sendSync("AT", 2000)) {
+    if (AT().sendSync("AT", 2000)) {
       canCommunicate = true;
       break;
     }
@@ -41,19 +47,19 @@ bool AsyncGSM::begin(const char *apn) {
     return false;
   }
 
-  if (!modem.setEchoOff()) {
+  if (!MODEM().setEchoOff()) {
     return false;
   }
 
-  if (!modem.enableVerboseErrors()) {
+  if (!MODEM().enableVerboseErrors()) {
     return false;
   }
 
-  if (!modem.checkModemModel()) {
+  if (!MODEM().checkModemModel()) {
     return false;
   }
 
-  if (!modem.checkTimezone()) {
+  if (!MODEM().checkTimezone()) {
     return false;
   }
 
@@ -61,7 +67,7 @@ bool AsyncGSM::begin(const char *apn) {
 
   while (true) {
     log_w("Waiting for SIM card...");
-    if (modem.checkSIMReady()) {
+    if (MODEM().checkSIMReady()) {
       log_d("SIM card is ready.");
       break;
     }
@@ -69,16 +75,16 @@ bool AsyncGSM::begin(const char *apn) {
   }
 
   // Deactivate all contexts just in case
-  modem.disableConnections();
+  MODEM().disableConnections();
 
-  modem.disalbeSleepMode();
+  MODEM().disalbeSleepMode();
 
-  if (!modem.gprsConnect(apn)) {
+  if (!MODEM().gprsConnect(apn)) {
     return false;
   }
 
   for (int i = 0; i < 10; ++i) {
-    if (modem.isGPRSSAttached() && modem.checkNetworkContext()) {
+    if (MODEM().isGPRSSAttached() && MODEM().checkNetworkContext()) {
       log_d("GPRS is attached.");
       return true;
     }
@@ -98,15 +104,15 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 
 void AsyncGSM::stop() {
   modemStop();
-  transport.reset();
+  TRANSPORT().reset();
   log_d("Connection stopped.");
 }
 
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }
 
 size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
-  if (modem.URCState.isConnected.load() != ConnectionStatus::CONNECTED ||
-      !at.getStream()) {
+  if (MODEM().URCState.isConnected.load() != ConnectionStatus::CONNECTED ||
+      !AT().getStream()) {
     log_e("Not connected or stream not initialized");
     return 0;
   }
@@ -124,19 +130,19 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 
   String command = ssl ? "AT+QSSLSEND=0," : "AT+QISEND=0,";
 
-  ATPromise *promise = at.sendCommand(command + String(size));
+  ATPromise *promise = AT().sendCommand(command + String(size));
   if (!promise) {
     log_e("Failed to create promise for AT+QISEND");
-    at.popCompletedPromise(promise->getId());
+    AT().popCompletedPromise(promise->getId());
     return 0;
   }
 
-  while (!at.getStream()->available()) {
+  while (!AT().getStream()->available()) {
     vTaskDelay(0);
   }
   String response;
-  while (at.getStream()->available()) {
-    char c = at.getStream()->read();
+  while (AT().getStream()->available()) {
+    char c = AT().getStream()->read();
     response += c;
     if (c == '>') {
       break;
@@ -144,16 +150,16 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   }
   if (response.indexOf('>') == -1) {
     log_e("Did not receive prompt '>'");
-    at.popCompletedPromise(promise->getId());
+    AT().popCompletedPromise(promise->getId());
     return 0;
   }
 
-  at.getStream()->write(buf, size);
-  at.getStream()->flush();
+  AT().getStream()->write(buf, size);
+  AT().getStream()->flush();
 
   bool promptReceived = promise->expect("SEND OK")->wait();
 
-  auto p = at.popCompletedPromise(promise->getId());
+  auto p = AT().popCompletedPromise(promise->getId());
   if (!promptReceived) {
     log_e("Failed to get SEND OK confirmation");
     return 0;
@@ -163,25 +169,21 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   return size;
 }
 
-int AsyncGSM::available() { return static_cast<int>(transport.available()); }
+int AsyncGSM::available() { return static_cast<int>(TRANSPORT().available()); }
 
-int AsyncGSM::read() { return transport.read(); }
+int AsyncGSM::read() { return TRANSPORT().read(); }
 
-int AsyncGSM::read(uint8_t *buf, size_t size) {
-  return static_cast<int>(transport.read(buf, size));
-}
+int AsyncGSM::read(uint8_t *buf, size_t size) { return static_cast<int>(TRANSPORT().read(buf, size)); }
 
-int AsyncGSM::peek() { return transport.peek(); }
+int AsyncGSM::peek() { return TRANSPORT().peek(); }
 
 void AsyncGSM::flush() {
   log_w("Flushing stream...");
-  if (!at.getStream()) {
+  if (!AT().getStream()) {
     log_e("Stream not initialized");
     return;
   }
-  transport.flush();
+  TRANSPORT().flush();
 }
 
-uint8_t AsyncGSM::connected() {
-  return modem.URCState.isConnected.load() == ConnectionStatus::CONNECTED;
-}
+uint8_t AsyncGSM::connected() { return MODEM().URCState.isConnected.load() == ConnectionStatus::CONNECTED; }
