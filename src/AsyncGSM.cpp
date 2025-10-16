@@ -12,12 +12,14 @@ AsyncGSM::~AsyncGSM() {
 }
 
 bool AsyncGSM::init(Stream &stream) {
-  log_i("Initializing AsyncGSM...");
+  log_d("Initializing AsyncGSM...");
   if (!at.begin(stream)) {
     log_e("Failed to initialize AsyncATHandler");
     return false;
   }
-  modem.init(stream, at, rxBuffer, rxMutex);
+  transport.init(stream, rxMutex);
+  transport.setDefaultSSL(ssl);
+  modem.init(stream, at, transport);
 
   return true;
 }
@@ -60,7 +62,7 @@ bool AsyncGSM::begin(const char *apn) {
   while (true) {
     log_w("Waiting for SIM card...");
     if (modem.checkSIMReady()) {
-      log_i("SIM card is ready.");
+      log_d("SIM card is ready.");
       break;
     }
     delay(1000);
@@ -77,7 +79,7 @@ bool AsyncGSM::begin(const char *apn) {
 
   for (int i = 0; i < 10; ++i) {
     if (modem.isGPRSSAttached() && modem.checkNetworkContext()) {
-      log_i("GPRS is attached.");
+      log_d("GPRS is attached.");
       return true;
     }
     delay(500);
@@ -95,9 +97,9 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 }
 
 void AsyncGSM::stop() {
-  log_i("Stopping connection...");
   modemStop();
-  log_i("Connection stopped.");
+  transport.reset();
+  log_d("Connection stopped.");
 }
 
 size_t AsyncGSM::write(uint8_t c) { return write(&c, 1); }
@@ -161,50 +163,15 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   return size;
 }
 
-int AsyncGSM::available() {
-  vTaskDelay(pdMS_TO_TICKS(10));
-  lockRx();
-  int availableBytes = (int)rxBuffer.size();
-  unlockRx();
-  return availableBytes;
-}
+int AsyncGSM::available() { return static_cast<int>(transport.available()); }
 
-int AsyncGSM::read() {
-  // Avoid logs here.
-  // log_d("read() called...");
-  lockRx();
-  int out = -1;
-  if (!rxBuffer.empty()) {
-    out = (int)rxBuffer.front();
-    rxBuffer.pop_front();
-  }
-  unlockRx();
-  return out;
-}
+int AsyncGSM::read() { return transport.read(); }
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {
-  log_d("Reading up to %zu bytes from buffer...", size);
-  if (rxBuffer.empty() || size == 0) {
-    return 0;
-  }
-  lockRx();
-
-  size_t toCopy = min(size, rxBuffer.size());
-  for (size_t i = 0; i < toCopy; i++) {
-    buf[i] = rxBuffer.front();
-    rxBuffer.pop_front();
-  }
-  unlockRx();
-  return toCopy;
+  return static_cast<int>(transport.read(buf, size));
 }
 
-int AsyncGSM::peek() {
-  log_d("Peeking into buffer...");
-  if (rxBuffer.size() == 0) {
-    return -1;
-  }
-  return rxBuffer.front();
-}
+int AsyncGSM::peek() { return transport.peek(); }
 
 void AsyncGSM::flush() {
   log_w("Flushing stream...");
@@ -212,7 +179,7 @@ void AsyncGSM::flush() {
     log_e("Stream not initialized");
     return;
   }
-  at.getStream()->flush();
+  transport.flush();
 }
 
 uint8_t AsyncGSM::connected() {

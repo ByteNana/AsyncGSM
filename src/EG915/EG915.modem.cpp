@@ -5,7 +5,7 @@ bool AsyncEG915U::setPDPContext(const char *apn) {
   ATPromise *promise = at->sendCommand("AT+CREG?");
   while (URCState.creg.load() != RegStatus::REG_OK_HOME &&
          URCState.creg.load() != RegStatus::REG_OK_ROAMING) {
-    log_i("Waiting for network registration...");
+    log_v("Waiting for network registration...");
     vTaskDelay(pdMS_TO_TICKS(2000));
     promise = at->sendCommand("AT+CREG?");
     if (!promise->wait() || !promise->getResponse()->isSuccess()) {

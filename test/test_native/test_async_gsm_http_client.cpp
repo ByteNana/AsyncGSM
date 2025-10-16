@@ -55,6 +55,7 @@ TEST_F(HttpClientUsageTest, GetRequestReturnsBody) {
         std::string captured;
         startTcpResponderCapturing(mock, &done, &captured, false);
 
+        scheduleInject(mock, 100, "\r\n+QIURC: \"recv\"\r\n");
         // Prepare incoming HTTP response via modem's read URC
         const std::string httpPayload =
             "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello\r\n\r\n";
@@ -106,6 +107,7 @@ TEST_F(HttpClientUsageTest, SendsRequestAndReadsResponse) {
         std::string captured;
         startTcpResponderCapturing(mock, &done, &captured, false);
 
+        scheduleInject(mock, 100, "\r\n+QIURC: \"recv\"\r\n");
         // Provide an HTTP/1.1 200 OK response via +QIRD
         const std::string httpPayload =
             "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello\r\n\r\n";
@@ -148,6 +150,7 @@ TEST_F(HttpClientUsageTest, PostSendsBodyAndReadsResponse) {
         std::string captured;
         startTcpResponderCapturing(mock, &done, &captured, false);
 
+        scheduleInject(mock, 100, "\r\n+QIURC: \"recv\"\r\n");
         // Provide a 200 OK response for POST
         const std::string respBody = "ok";
         const std::string httpPayload =

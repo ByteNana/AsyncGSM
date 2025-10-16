@@ -6,7 +6,7 @@ const String cidx = "1";
 AsyncMqttGSM::AsyncMqttGSM() {}
 
 bool AsyncMqttGSM::init(AsyncEG915U &modem, AsyncATHandler &atHandler) {
-  log_i("Initializing AsyncMqttGSM...");
+  log_d("Initializing AsyncMqttGSM...");
   this->modem = &modem;
   this->at = &atHandler;
   this->modem->mqttQueueSub = &mqttQueueSub;
@@ -225,7 +225,7 @@ void AsyncMqttGSM::loop() {
 }
 
 bool AsyncMqttGSM::reconnect() {
-  log_i("Reconnecting to MQTT server...");
+  log_w("Reconnecting to MQTT server...");
   if (!connect(apn, user, pass)) {
     log_e("Failed to reconnect to MQTT server");
     return false;
