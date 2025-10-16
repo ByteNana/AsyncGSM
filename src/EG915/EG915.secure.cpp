@@ -151,11 +151,3 @@ bool AsyncEG915U::findUFSFile(const char *pattern, String *outName,
   }
   return true;
 }
-
-static String md5Hex(const uint8_t *data, size_t size) {
-  MD5Builder md5;
-  md5.begin();
-  md5.add(data, size);
-  md5.calculate();
-  return md5.toString();
-}

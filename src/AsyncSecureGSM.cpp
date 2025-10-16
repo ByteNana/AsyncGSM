@@ -17,7 +17,7 @@ void AsyncSecureGSM::setCACert(const char *rootCA) {
 
   MD5Builder md5;
   md5.begin();
-  md5.add((const uint8_t *)rootCA, strlen(rootCA));
+  md5.add((uint8_t *)rootCA, strlen(rootCA));
   md5.calculate();
   String newMd5 = md5.toString();
 
