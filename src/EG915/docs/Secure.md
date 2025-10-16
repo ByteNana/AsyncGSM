@@ -62,6 +62,42 @@ If the optional parameter is omitted, query the path of
 configured trusted CA certificate for the specified SSL context
 ```
 
+## Uploading Certificates
+
+To use server authentication (`seclevel=1`), the module must have a CA certificate stored in UFS and the SSL context must point to it via `QSSLCFG="cacert"`.
+
+Upload file with `QFUPL` (AT-only example):
+
+```
+AT+QFUPL="<filename>",<size>,<timeout>
+CONNECT
+<send <size> bytes of the PEM file>
+OK
++QFUPL: <size>
+```
+
+Then set the SSL context to use the uploaded file and enable verification:
+
+```
+AT+QSSLCFG="cacert",<sslindex>,"<filename>"
+AT+QSSLCFG="seclevel",<sslindex>,1
+```
+
+## Library Usage (MD5-Named CA)
+
+- `AsyncSecureGSM::setCACert(const char* pem)`: Calculates MD5 of the provided PEM and uses the 32-char hex digest as the UFS filename.
+  - If the MD5 matches the last applied value (cached), it does nothing.
+  - Otherwise it checks UFS for an existing file with that MD5 name using `QFLST`.
+    - If found, it reuses it.
+    - If not found, it uploads the PEM under that MD5 filename.
+  - Finally it sets `QSSLCFG="cacert"` to that filename and sets `seclevel=1`.
+
+Helpers exposed by the modem driver:
+
+- `findUFSFile(pattern, &name, &size)`: Returns true if at least one match exists from `AT+QFLST="pattern"`, and optionally returns the first match and size.
+- `uploadUFSFile(path, data, size)`: Uploads raw bytes to UFS using `AT+QFUPL`.
+- `setCACertificate(path)`: Sets `QSSLCFG="cacert"` and `seclevel=1` for the active SSL index.
+
 5. Open SSL connection:
 
 ```
