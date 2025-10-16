@@ -17,7 +17,9 @@ bool AsyncGSM::init(Stream &stream) {
     log_e("Failed to initialize AsyncATHandler");
     return false;
   }
-  modem.init(stream, at, rxBuffer, rxMutex);
+  transport.init(stream, rxMutex);
+  transport.setDefaultSSL(ssl);
+  modem.init(stream, at, transport);
 
   return true;
 }
@@ -97,6 +99,7 @@ int AsyncGSM::connect(const char *host, uint16_t port) {
 void AsyncGSM::stop() {
   log_i("Stopping connection...");
   modemStop();
+  transport.reset();
   log_i("Connection stopped.");
 }
 
@@ -161,50 +164,15 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
   return size;
 }
 
-int AsyncGSM::available() {
-  vTaskDelay(pdMS_TO_TICKS(10));
-  lockRx();
-  int availableBytes = (int)rxBuffer.size();
-  unlockRx();
-  return availableBytes;
-}
+int AsyncGSM::available() { return static_cast<int>(transport.available()); }
 
-int AsyncGSM::read() {
-  // Avoid logs here.
-  // log_d("read() called...");
-  lockRx();
-  int out = -1;
-  if (!rxBuffer.empty()) {
-    out = (int)rxBuffer.front();
-    rxBuffer.pop_front();
-  }
-  unlockRx();
-  return out;
-}
+int AsyncGSM::read() { return transport.read(); }
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {
-  log_d("Reading up to %zu bytes from buffer...", size);
-  if (rxBuffer.empty() || size == 0) {
-    return 0;
-  }
-  lockRx();
-
-  size_t toCopy = min(size, rxBuffer.size());
-  for (size_t i = 0; i < toCopy; i++) {
-    buf[i] = rxBuffer.front();
-    rxBuffer.pop_front();
-  }
-  unlockRx();
-  return toCopy;
+  return static_cast<int>(transport.read(buf, size));
 }
 
-int AsyncGSM::peek() {
-  log_d("Peeking into buffer...");
-  if (rxBuffer.size() == 0) {
-    return -1;
-  }
-  return rxBuffer.front();
-}
+int AsyncGSM::peek() { return transport.peek(); }
 
 void AsyncGSM::flush() {
   log_w("Flushing stream...");
@@ -212,7 +180,7 @@ void AsyncGSM::flush() {
     log_e("Stream not initialized");
     return;
   }
-  at.getStream()->flush();
+  transport.flush();
 }
 
 uint8_t AsyncGSM::connected() {

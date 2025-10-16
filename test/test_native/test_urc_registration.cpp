@@ -42,17 +42,23 @@ TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
   EXPECT_TRUE(ok);
 }
 
-TEST_F(URCRegistrationTest, QIURCRecv_TriggersReadCommand) {
+TEST_F(URCRegistrationTest, QIURCRecvDeferredUntilAvailable) {
   bool ok = runInFreeRTOSTask(
       [this]() {
         ASSERT_TRUE(gsm->init(*mock));
 
         // Clear any previous TX
         (void)mock->GetTxData();
-        // Data-ready URC should cause a QIRD command to be sent
+        // Data-ready URC should not trigger reads until the client polls
         InjectRx(mock, "\r\n+QIURC: \"recv\"\r\n");
-        vTaskDelay(pdMS_TO_TICKS(30));
+        vTaskDelay(pdMS_TO_TICKS(20));
         std::string tx = mock->GetTxData();
+        EXPECT_EQ(tx.find("AT+QIRD=0\r\n"), std::string::npos);
+
+        // Calling available() should trigger the read command
+        EXPECT_EQ(gsm->available(), 0);
+        vTaskDelay(pdMS_TO_TICKS(20));
+        tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QIRD=0\r\n"), std::string::npos);
       },
       "URC_QIURC_RECV", 8192, 2, 3000);

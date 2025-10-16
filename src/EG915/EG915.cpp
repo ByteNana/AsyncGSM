@@ -11,11 +11,10 @@ AsyncEG915U::~AsyncEG915U() {
 }
 
 bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
-                       std::deque<uint8_t> &rxBuf, SemaphoreHandle_t &mutex) {
+                       GSMTransport &transportRef) {
   at = &atHandler;
   _stream = &stream;
-  rxBuffer = &rxBuf;
-  rxMutex = mutex;
+  transport = &transportRef;
   // Register dynamic URC handlers
   registerURCs();
   return true;

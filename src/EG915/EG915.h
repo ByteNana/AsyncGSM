@@ -7,12 +7,13 @@
 
 #include "EG915.settings.h"
 
+class GSMTransport;
+
 class AsyncEG915U {
 private:
   Stream *_stream = nullptr;
+  GSMTransport *transport = nullptr;
   AsyncATHandler *at;
-  std::deque<uint8_t> *rxBuffer;
-  SemaphoreHandle_t rxMutex = nullptr;
 
   // Dynamic URC registration helpers
   void registerURCs();
@@ -28,8 +29,6 @@ private:
   void onReadData(const String &urc);
   void onMqttRecv(const String &urc);
   void onMqttStat(const String &urc);
-  void lockRx() { xSemaphoreTake(rxMutex, portMAX_DELAY); }
-  void unlockRx() { xSemaphoreGive(rxMutex); }
 
 public:
   UrcState URCState;
@@ -37,8 +36,7 @@ public:
 
   AsyncEG915U();
   ~AsyncEG915U();
-  bool init(Stream &stream, AsyncATHandler &atHandler,
-            std::deque<uint8_t> &rxBuf, SemaphoreHandle_t &mutex);
+  bool init(Stream &stream, AsyncATHandler &atHandler, GSMTransport &transport);
   bool setEchoOff();
   bool enableVerboseErrors();
   bool checkModemModel();
