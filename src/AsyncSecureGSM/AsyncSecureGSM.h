@@ -9,8 +9,6 @@ class AsyncSecureGSM : public AsyncGSM {
 
   void setCACert(const char *rootCA);
 
-  GSMContext &context() { return (*ctx); }
-
  protected:
   bool isSecure() const override { return true; }
   bool modemConnect(const char *host, uint16_t port) override;

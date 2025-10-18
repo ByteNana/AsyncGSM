@@ -101,17 +101,18 @@ bool AsyncEG915U::uploadUFSFile(
   return true;
 }
 
-bool AsyncEG915U::setCACertificate(const char *ufsPath) {
+bool AsyncEG915U::setCACertificate(const char *ufsPath, const char *cidx) {
   if (!ufsPath || !*ufsPath) {
     log_e("Invalid CA cert path");
     return false;
   }
-  String cmd = String("AT+QSSLCFG=\"cacert\",1,\"") + ufsPath + "\"";
+  String cmd = String("AT+QSSLCFG=\"cacert\",") + cidx + ",\"" + ufsPath + "\"";
   if (!at->sendSync(cmd)) {
     log_e("Failed to set CA certificate path");
     return false;
   }
-  if (!at->sendSync("AT+QSSLCFG=\"seclevel\",1,1")) {
+  cmd = String("AT+QSSLCFG=\"seclevel\",") + cidx + ",1";
+  if (!at->sendSync(cmd)) {
     log_e("Failed to set SSL seclevel to 1");
     return false;
   }
