@@ -1,8 +1,7 @@
 #pragma once
 
+#include <AsyncMqttGSM/AsyncMqttGSM.h>
 #include <GSMContext/GSMContext.h>
-
-#include "AsyncMqttGSM.h"
 
 class AsyncSecureMqttGSM : public AsyncMqttGSM {
  public:
