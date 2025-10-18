@@ -1,14 +1,15 @@
+#include <atomic>
+#include <string>
+
 #include "AsyncGSM.h"
 #include "Stream.h"
 #include "common/common.h"
 #include "common/responder.h"
-#include <atomic>
-#include <string>
 
 using ::testing::NiceMock;
 
 class AsyncGSMGprsTest : public FreeRTOSTest {
-protected:
+ protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mockStream{nullptr};
 
@@ -20,20 +21,19 @@ protected:
   }
 
   void TearDown() override {
-    if (gsm)
+    if (gsm) {
+      gsm->context().end();
+      vTaskDelay(pdMS_TO_TICKS(80));
       delete gsm;
-    if (mockStream)
-      delete mockStream;
+    }
+    if (mockStream) delete mockStream;
     FreeRTOSTest::TearDown();
   }
 };
 
-static void startGprsResponder(NiceMock<MockStream> *mockStream,
-                               std::atomic<bool> *done) {
+static void startGprsResponder(NiceMock<MockStream> *mockStream, std::atomic<bool> *done) {
   auto responder = [](void *pv) {
-    auto *ctx =
-        static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *> *>(
-            pv);
+    auto *ctx = static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *> *>(pv);
     auto *s = std::get<0>(*ctx);
     auto *done = std::get<1>(*ctx);
 
@@ -43,8 +43,7 @@ static void startGprsResponder(NiceMock<MockStream> *mockStream,
     std::string buf;
     while (!done->load()) {
       std::string tx = DrainTx(s);
-      if (!tx.empty())
-        buf += tx;
+      if (!tx.empty()) buf += tx;
 
       size_t pos;
       while ((pos = buf.find("\r\n")) != std::string::npos) {
@@ -100,23 +99,22 @@ static void startGprsResponder(NiceMock<MockStream> *mockStream,
     vTaskDelete(nullptr);
   };
 
-  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *>(
-      mockStream, done);
-  xTaskCreate(responder, "GPRS_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
-              nullptr);
+  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *>(mockStream, done);
+  xTaskCreate(responder, "GPRS_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1, nullptr);
 }
 
 TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mockStream));
+        ASSERT_TRUE(gsm->context().begin(*mockStream));
+
         // Pretend we are already registered to skip wait loop
-        gsm->modem.URCState.creg.store(RegStatus::REG_OK_HOME);
+        gsm->context().modem().URCState.creg.store(RegStatus::REG_OK_HOME);
 
         std::atomic<bool> done{false};
         startGprsResponder(mockStream, &done);
 
-        bool res = gsm->modem.gprsConnect("apn", "user", "pwd");
+        bool res = gsm->context().modem().gprsConnect("apn", "user", "pwd");
         done = true;
         vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);
@@ -128,13 +126,14 @@ TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
 TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNOnly) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mockStream));
-        gsm->modem.URCState.creg.store(RegStatus::REG_OK_HOME);
+        ASSERT_TRUE(gsm->context().begin(*mockStream));
+
+        gsm->context().modem().URCState.creg.store(RegStatus::REG_OK_HOME);
 
         std::atomic<bool> done{false};
         startGprsResponder(mockStream, &done);
 
-        bool res = gsm->modem.gprsConnect("apn");
+        bool res = gsm->context().modem().gprsConnect("apn");
         done = true;
         vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);

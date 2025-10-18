@@ -66,16 +66,16 @@ void test_gprs_connect_sequence() {
   bool ok = true;
 
   ok &= handler.sendSync("AT+QIDEACT=1", response, 2000);
-  String cmdQICSGP =
-      String("AT+QICSGP=1,1,\"") + "internet" + "\",\"user\",\"pass\"";
+  String cmdQICSGP = String("AT+QICSGP=1,1,\"") + "internet" + "\",\"user\",\"pass\"";
   ok &= handler.sendSync(cmdQICSGP, response, 5000);
   ok &= handler.sendSync("AT+QIACT=1", response, 150000);
   ok &= handler.sendSync("AT+CGATT=1", response, 60000);
 
-  String expected = "AT+QIDEACT=1\r\n"
-                    "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\n"
-                    "AT+QIACT=1\r\n"
-                    "AT+CGATT=1\r\n";
+  String expected =
+      "AT+QIDEACT=1\r\n"
+      "AT+QICSGP=1,1,\"internet\",\"user\",\"pass\"\r\n"
+      "AT+QIACT=1\r\n"
+      "AT+CGATT=1\r\n";
 
   TEST_ASSERT_EQUAL_STRING(expected.c_str(), mockSerial.getSentData().c_str());
   TEST_ASSERT_TRUE(ok);

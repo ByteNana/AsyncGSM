@@ -82,6 +82,15 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
   ${LIB_SRC_DIR}/*.c
 )
 
+# Build PUBLIC include dirs dynamically from src/*
+set(LIB_PUBLIC_INCLUDE_DIRS ${LIB_SRC_DIR})
+file(GLOB SRC_CHILDREN RELATIVE ${LIB_SRC_DIR} ${LIB_SRC_DIR}/*)
+foreach(child ${SRC_CHILDREN})
+  if (IS_DIRECTORY ${LIB_SRC_DIR}/${child})
+    list(APPEND LIB_PUBLIC_INCLUDE_DIRS ${LIB_SRC_DIR}/${child})
+  endif()
+endforeach()
+
 # Get ArduinoHttpClient source files
 file(GLOB_RECURSE ARDUINO_HTTP_CLIENT_SOURCES CONFIGURE_DEPENDS
   ${arduinohttpclient_SOURCE_DIR}/src/*.cpp
@@ -93,7 +102,7 @@ add_library(AsyncGSM STATIC ${SRC_FILES} ${ARDUINO_HTTP_CLIENT_SOURCES})
 
 # Add include directories for AsyncGSM
 target_include_directories(AsyncGSM PUBLIC
-  ${LIB_SRC_DIR}
+  ${LIB_PUBLIC_INCLUDE_DIRS}
   ${arduinonativemocks_SOURCE_DIR}/src
   ${asyncathandler_SOURCE_DIR}/src
   ${arduinohttpclient_SOURCE_DIR}/src

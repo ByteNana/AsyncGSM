@@ -1,4 +1,5 @@
 #include "GSMContext.h"
+
 #include "esp_log.h"
 
 GSMContext::GSMContext() { rxMutex = xSemaphoreCreateMutex(); }
@@ -59,6 +60,8 @@ bool GSMContext::setupNetwork(const char *apn) {
 void GSMContext::end() {
   if (ioStream) {
     atHandler.end();
+    // Give the handler a brief window to fully stop internal tasks
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
+  ioStream = nullptr;
 }
-

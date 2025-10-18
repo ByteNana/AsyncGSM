@@ -19,7 +19,7 @@ LOG_LEVEL_ARG := $(filter-out \
   $(MAKECMDGOALS))
 
 # Set default log level if no argument provided
-LOG_LEVEL := $(if $(LOG_LEVEL_ARG),$(LOG_LEVEL_ARG),3)
+LOG_LEVEL := $(if $(LOG_LEVEL_ARG),$(LOG_LEVEL_ARG),0)
 
 # ==============================================================================
 # Make Configuration

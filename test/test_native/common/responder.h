@@ -2,26 +2,26 @@
 // payload
 #pragma once
 
-#include "common.h"
+#include <gmock/gmock.h>
+
 #include <atomic>
 #include <cstdio>
-#include <gmock/gmock.h>
 #include <string>
+
+#include "common.h"
 
 using ::testing::NiceMock;
 
 #if LOG_LEVEL == 5
-#define SERIAL_LOG(dir, strref)                                                \
-  do {                                                                         \
-    const std::string &_s = (strref);                                          \
-    printf("[%s] %s\n", (dir), _s.c_str());                                    \
-    fflush(stdout);                                                            \
+#define SERIAL_LOG(dir, strref)             \
+  do {                                      \
+    const std::string &_s = (strref);       \
+    printf("[%s] %s\n", (dir), _s.c_str()); \
+    fflush(stdout);                         \
   } while (0)
 #else
-#define SERIAL_LOG(dir, strref)                                                \
-  do {                                                                         \
-    (void)sizeof(strref);                                                      \
-  } while (0)
+#define SERIAL_LOG(dir, strref) \
+  do { (void)sizeof(strref); } while (0)
 #endif
 
 inline void InjectRx(class MockStream *s, const std::string &data) {
@@ -29,38 +29,34 @@ inline void InjectRx(class MockStream *s, const std::string &data) {
   s->InjectRxData(data);
 }
 
-inline void InjectRx(class MockStream *s, const char *data) {
-  InjectRx(s, std::string(data));
-}
+inline void InjectRx(class MockStream *s, const char *data) { InjectRx(s, std::string(data)); }
 
 inline std::string DrainTx(class MockStream *s) {
   std::string chunk = s->GetTxData();
-  if (!chunk.empty()) {
-    SERIAL_LOG("TX <", chunk);
-  }
+  if (!chunk.empty()) { SERIAL_LOG("TX <", chunk); }
   return chunk;
 }
 
 // Basic responder: handles QIOPEN/QISEND/QICLOSE and injects modem responses
-inline void startTcpResponder(NiceMock<MockStream> *s, std::atomic<bool> *done,
-                              bool failOpen = false) {
+inline void startTcpResponder(
+    NiceMock<MockStream> *s, std::atomic<bool> *done, bool failOpen = false) {
   auto responder = [](void *pv) {
-    auto *ctx = static_cast<
-        std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, bool> *>(pv);
+    using Ctx = std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, bool, std::atomic<bool> *>;
+    auto *ctx = static_cast<Ctx *>(pv);
     auto *s = std::get<0>(*ctx);
     auto *done = std::get<1>(*ctx);
     bool failOpen = std::get<2>(*ctx);
+    auto *started = std::get<3>(*ctx);
 
     std::string acc;
     TickType_t start = xTaskGetTickCount();
     const TickType_t maxTicks = pdMS_TO_TICKS(10000);
+    if (started) started->store(true);
     while (!done->load()) {
-      if ((xTaskGetTickCount() - start) > maxTicks)
-        break; // safety bound
+      if ((xTaskGetTickCount() - start) > maxTicks) break;  // safety bound
 
       std::string chunk = DrainTx(s);
-      if (!chunk.empty())
-        acc += chunk;
+      if (!chunk.empty()) acc += chunk;
 
       size_t pos;
       while ((pos = acc.find("\r\n")) != std::string::npos) {
@@ -81,46 +77,61 @@ inline void startTcpResponder(NiceMock<MockStream> *s, std::atomic<bool> *done,
           continue;
         }
         if (starts_with("AT+QICLOSE")) {
+          // Real modems typically reply OK, then emit a close URC shortly after
+          InjectRx(s, "OK\r\n");
+          vTaskDelay(pdMS_TO_TICKS(1));
+          InjectRx(s, "+QIURC: \"closed\"\r\n");
+          continue;
+        }
+        // Generic OK for any other AT+ commands so features (e.g., MQTT cfg) don't time out
+        if (starts_with("AT+")) {
           InjectRx(s, "OK\r\n");
           continue;
         }
       }
       vTaskDelay(pdMS_TO_TICKS(1));
     }
+    delete started;
     delete ctx;
     vTaskDelete(nullptr);
   };
-  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, bool>(
-      s, done, failOpen);
-  xTaskCreate(responder, "TCP_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
-              nullptr);
+  auto *started = new std::atomic<bool>(false);
+  auto *ctx =
+      new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, bool, std::atomic<bool> *>(
+          s, done, failOpen, started);
+  // Use slightly higher priority so responder starts before first AT command
+  xTaskCreate(responder, "TCP_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 3, nullptr);
+  // Wait briefly for responder to report it has started
+  TickType_t t0 = xTaskGetTickCount();
+  while (!started->load() && (xTaskGetTickCount() - t0) < pdMS_TO_TICKS(50)) {
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
 }
 
 // Capturing responder: as above, but captures payload lines (non-AT) into
 // outCapture
-inline void startTcpResponderCapturing(NiceMock<MockStream> *s,
-                                       std::atomic<bool> *done,
-                                       std::string *outCapture,
-                                       bool failOpen = false) {
+inline void startTcpResponderCapturing(
+    NiceMock<MockStream> *s, std::atomic<bool> *done, std::string *outCapture,
+    bool failOpen = false) {
   auto responder = [](void *pv) {
-    auto *ctx =
-        static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
-                               std::string *, bool> *>(pv);
+    using Ctx = std::tuple<
+        NiceMock<MockStream> *, std::atomic<bool> *, std::string *, bool, std::atomic<bool> *>;
+    auto *ctx = static_cast<Ctx *>(pv);
     auto *s = std::get<0>(*ctx);
     auto *done = std::get<1>(*ctx);
     auto *cap = std::get<2>(*ctx);
     bool failOpen = std::get<3>(*ctx);
+    auto *started = std::get<4>(*ctx);
 
     std::string acc;
     TickType_t start = xTaskGetTickCount();
     const TickType_t maxTicks = pdMS_TO_TICKS(10000);
+    if (started) started->store(true);
     while (!done->load()) {
-      if ((xTaskGetTickCount() - start) > maxTicks)
-        break; // safety bound
+      if ((xTaskGetTickCount() - start) > maxTicks) break;  // safety bound
 
       std::string chunk = DrainTx(s);
-      if (!chunk.empty())
-        acc += chunk;
+      if (!chunk.empty()) acc += chunk;
 
       size_t pos;
       while ((pos = acc.find("\r\n")) != std::string::npos) {
@@ -141,6 +152,14 @@ inline void startTcpResponderCapturing(NiceMock<MockStream> *s,
           continue;
         }
         if (starts_with("AT+QICLOSE")) {
+          InjectRx(s, "OK\r\n");
+          vTaskDelay(pdMS_TO_TICKS(1));
+          InjectRx(s, "+QIURC: \"closed\"\r\n");
+          continue;
+        }
+
+        // Generic OK for other AT+ commands to avoid swallowing them
+        if (starts_with("AT+")) {
           InjectRx(s, "OK\r\n");
           continue;
         }
@@ -159,12 +178,17 @@ inline void startTcpResponderCapturing(NiceMock<MockStream> *s,
       }
       vTaskDelay(pdMS_TO_TICKS(1));
     }
+    delete started;
     delete ctx;
     vTaskDelete(nullptr);
   };
-  auto *ctx =
-      new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, std::string *,
-                     bool>(s, done, outCapture, failOpen);
-  xTaskCreate(responder, "TCP_RESP_CAP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
-              nullptr);
+  auto *started = new std::atomic<bool>(false);
+  auto *ctx = new std::tuple<
+      NiceMock<MockStream> *, std::atomic<bool> *, std::string *, bool, std::atomic<bool> *>(
+      s, done, outCapture, failOpen, started);
+  xTaskCreate(responder, "TCP_RESP_CAP", configMINIMAL_STACK_SIZE * 4, ctx, 3, nullptr);
+  TickType_t t0 = xTaskGetTickCount();
+  while (!started->load() && (xTaskGetTickCount() - t0) < pdMS_TO_TICKS(50)) {
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
 }

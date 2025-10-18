@@ -2,13 +2,12 @@
 
 #include <Arduino.h>
 #include <AsyncATHandler.h>
+#include <Client.h>
+#include <modules/EG915/EG915.h>
+#include <utils/GSMTransport/GSMTransport.h>
 
-#include "EG915/EG915.h"
-#include "GSMTransport.h"
-
-// Owns the modem/AT/transport stack once; clients attach to this.
 class GSMContext {
-public:
+ public:
   GSMContext();
 
   bool begin(Stream &stream);
@@ -20,11 +19,10 @@ public:
   GSMTransport &transport() { return rxTransport; }
   Stream *stream() { return ioStream; }
 
-private:
+ private:
   SemaphoreHandle_t rxMutex;
   GSMTransport rxTransport;
   AsyncATHandler atHandler;
   AsyncEG915U modemDriver;
   Stream *ioStream{nullptr};
 };
-

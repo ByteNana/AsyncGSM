@@ -6,8 +6,7 @@ AsyncATHandler handler;
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial)
-    ;
+  while (!Serial);
 
   Serial.println("[ESP32] Initializing AsyncATHandler...");
   handler.begin(Serial);
