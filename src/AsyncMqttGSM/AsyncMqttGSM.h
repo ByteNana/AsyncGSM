@@ -31,6 +31,8 @@ class AsyncMqttGSM {
 
   bool init();
 
+  GSMContext &context() { return *ctx; }
+
   AsyncMqttGSM &setServer(const char *domain, uint16_t port);
   uint8_t connected();
   bool connect(const char *id, const char *user, const char *pass);
@@ -40,4 +42,9 @@ class AsyncMqttGSM {
   bool unsubscribe(const char *topic);
   AsyncMqttGSM &setCallback(AsyncMqttGSMCallback callback);
   void loop();
+
+ protected:
+  const char *cidx = "1";
+  void setSecurityLevel(bool secure);
+  virtual bool isSecure() const { return false; }
 };
