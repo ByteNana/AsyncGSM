@@ -1,10 +1,12 @@
 #pragma once
 
-#include "freertos/FreeRTOS.h"
 #include <Arduino.h>
+
 #include <atomic>
 #include <memory>
 #include <queue>
+
+#include "freertos/FreeRTOS.h"
 
 struct MqttMessage {
   String topic;
@@ -19,11 +21,11 @@ struct MqttMessage {
 using MqttMessagePtr = std::shared_ptr<MqttMessage>;
 
 class AtomicMqttQueue {
-private:
+ private:
   QueueHandle_t messageQueue;
   std::atomic<bool> hasMessage{false};
 
-public:
+ public:
   AtomicMqttQueue();
 
   ~AtomicMqttQueue();

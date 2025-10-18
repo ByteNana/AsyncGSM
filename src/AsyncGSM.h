@@ -3,30 +3,19 @@
 #include <Arduino.h>
 #include <AsyncATHandler.h>
 #include <Client.h>
-
-#include "EG915/EG915.h"
-#include "GSMTransport.h"
-#include "GSMContext/GSMContext.h"
+#include <GSMContext/GSMContext.h>
+#include <modules/EG915/EG915.h>
+#include <utils/GSMTransport/GSMTransport.h>
 
 class AsyncGSM : public Client {
-private:
+ private:
   SemaphoreHandle_t rxMutex = xSemaphoreCreateMutex();
-  GSMTransport transport;
-  GSMContext *ctx = nullptr; // optional attached shared context
 
-public:
-  AsyncEG915U modem;
-  AsyncATHandler at;
-
+ public:
+  AsyncGSM(GSMContext &context);
   AsyncGSM();
   ~AsyncGSM();
-  virtual bool init(Stream &stream);
-  bool begin(const char *apn = nullptr);
-  // Attach to a shared GSMContext (no ownership).
-  bool attach(GSMContext &context) {
-    ctx = &context;
-    return true;
-  }
+
   int connect(IPAddress ip, uint16_t port) override;
   int connect(const char *host, uint16_t port) override;
   size_t write(uint8_t c) override;
@@ -50,16 +39,12 @@ public:
   bool isConnected();
   bool gprsDisconnect();
 
-  // helpers
-  AsyncATHandler &getATHandler() { return at; }
-  AsyncEG915U &getModem() { return modem; }
-  // When attached, prefer context-owned instances
-  AsyncATHandler &AT();
-  AsyncEG915U &MODEM();
-  GSMTransport &TRANSPORT();
+  GSMContext &context() { return (*ctx); }
 
-protected:
-  bool ssl = false;
+ protected:
+  bool owns = false;
+  GSMContext *ctx;
+  virtual bool isSecure() const { return false; }
 
   virtual bool modemConnect(const char *host, uint16_t port);
   virtual bool modemStop();

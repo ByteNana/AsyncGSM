@@ -1,16 +1,17 @@
 #pragma once
 
-#include "EG915/EG915.h"
+#include <GSMContext/GSMContext.h>
+#include <modules/EG915/EG915.h>
+
 #include <set>
 
-using AsyncMqttGSMCallback =
-    std::function<void(char *, uint8_t *, unsigned int)>;
+using AsyncMqttGSMCallback = std::function<void(char *, uint8_t *, unsigned int)>;
 
 class AsyncMqttGSM {
-private:
-  AsyncEG915U *modem = nullptr;
-  AsyncATHandler *at = nullptr;
+ private:
   AtomicMqttQueue mqttQueueSub;
+  bool owns = false;
+  GSMContext *ctx;
 
   AsyncMqttGSMCallback mqttCallback = nullptr;
 
@@ -23,11 +24,12 @@ private:
 
   bool reconnect();
 
-public:
+ public:
+  AsyncMqttGSM(GSMContext &context);
   AsyncMqttGSM();
-  ~AsyncMqttGSM() = default;
+  ~AsyncMqttGSM();
 
-  bool init(AsyncEG915U &modem, AsyncATHandler &atHandler);
+  bool init();
 
   AsyncMqttGSM &setServer(const char *domain, uint16_t port);
   uint8_t connected();

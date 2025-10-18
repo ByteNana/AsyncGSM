@@ -30,20 +30,15 @@ void GSMTransport::setDefaultSSL(bool enabled) {
 }
 
 void GSMTransport::lock() {
-  if (rxMutex) {
-    xSemaphoreTake(rxMutex, portMAX_DELAY);
-  }
+  if (rxMutex) { xSemaphoreTake(rxMutex, portMAX_DELAY); }
 }
 
 void GSMTransport::unlock() {
-  if (rxMutex) {
-    xSemaphoreGive(rxMutex);
-  }
+  if (rxMutex) { xSemaphoreGive(rxMutex); }
 }
 
 void GSMTransport::requestChannel(Channel ch) {
-  if (!stream)
-    return;
+  if (!stream) return;
   lastChannel = ch;
   if (ch == Channel::SSL) {
     log_d("GSMTransport requesting SSL chunk");
@@ -76,9 +71,7 @@ void GSMTransport::maybeRequestNext() {
   }
   unlock();
 
-  if (shouldRequest) {
-    requestChannel(nextChannel);
-  }
+  if (shouldRequest) { requestChannel(nextChannel); }
 }
 
 void GSMTransport::notifyDataReady(bool isSSL) {
@@ -95,12 +88,8 @@ void GSMTransport::deliverChunk(std::vector<uint8_t> &&chunk) {
 
   lock();
   awaitingChunk = false;
-  if (!chunk.empty()) {
-    buffer.insert(buffer.end(), chunk.begin(), chunk.end());
-  }
-  if (chunk.size() >= MAX_CHUNK_SIZE) {
-    enableAutopoll = true;
-  }
+  if (!chunk.empty()) { buffer.insert(buffer.end(), chunk.begin(), chunk.end()); }
+  if (chunk.size() >= MAX_CHUNK_SIZE) { enableAutopoll = true; }
   if (buffer.empty()) {
     if (!pendingChannels.empty()) {
       nextChannel = pendingChannels.front();
@@ -119,9 +108,7 @@ void GSMTransport::deliverChunk(std::vector<uint8_t> &&chunk) {
   }
   unlock();
 
-  if (shouldRequest) {
-    requestChannel(nextChannel);
-  }
+  if (shouldRequest) { requestChannel(nextChannel); }
 }
 
 size_t GSMTransport::available() {
@@ -135,14 +122,12 @@ size_t GSMTransport::available() {
 int GSMTransport::read() {
   uint8_t byte{0};
   size_t copied = read(&byte, 1);
-  if (copied == 0)
-    return -1;
+  if (copied == 0) return -1;
   return static_cast<int>(byte);
 }
 
 size_t GSMTransport::read(uint8_t *buf, size_t size) {
-  if (!buf || size == 0)
-    return 0;
+  if (!buf || size == 0) return 0;
 
   lock();
   size_t toCopy = std::min<size_t>(size, buffer.size());
@@ -158,9 +143,7 @@ size_t GSMTransport::read(uint8_t *buf, size_t size) {
   }
   unlock();
 
-  if (needRequest || autopollNeeded) {
-    maybeRequestNext();
-  }
+  if (needRequest || autopollNeeded) { maybeRequestNext(); }
 
   return toCopy;
 }
@@ -188,6 +171,5 @@ int GSMTransport::peek() {
 }
 
 void GSMTransport::flush() {
-  if (stream)
-    stream->flush();
+  if (stream) stream->flush();
 }

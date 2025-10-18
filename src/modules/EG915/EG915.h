@@ -2,15 +2,15 @@
 
 #include <Arduino.h>
 #include <AsyncATHandler.h>
-#include <MqttQueue/MqttQueue.h>
 #include <Stream.h>
+#include <utils/MqttQueue/MqttQueue.h>
 
 #include "EG915.settings.h"
 
 class GSMTransport;
 
 class AsyncEG915U {
-private:
+ private:
   Stream *_stream = nullptr;
   GSMTransport *transport = nullptr;
   AsyncATHandler *at;
@@ -31,7 +31,7 @@ private:
   void onMqttRecv(const String &urc);
   void onMqttStat(const String &urc);
 
-public:
+ public:
   UrcState URCState;
   AtomicMqttQueue *mqttQueueSub = nullptr;
 
@@ -44,8 +44,7 @@ public:
   bool checkTimezone();
   bool checkSIMReady();
   bool disalbeSleepMode();
-  bool gprsConnect(const char *apn, const char *user = nullptr,
-                   const char *pass = nullptr);
+  bool gprsConnect(const char *apn, const char *user = nullptr, const char *pass = nullptr);
   bool gprsDisconnect();
   String getSimCCID();
   String getIMEI();
@@ -57,11 +56,10 @@ public:
   bool connectSecure(const char *host, uint16_t port, const char *caCertPath);
   bool stopSecure();
 
-  bool uploadUFSFile(const char *path, const uint8_t *data, size_t size,
-                     uint32_t timeoutMs = 120000);
+  bool uploadUFSFile(
+      const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs = 120000);
   bool setCACertificate(const char *ufsPath);
-  bool findUFSFile(const char *pattern, String *outName = nullptr,
-                   size_t *outSize = nullptr);
+  bool findUFSFile(const char *pattern, String *outName = nullptr, size_t *outSize = nullptr);
 
   // Helpers for GPRS connection
   void disableConnections();

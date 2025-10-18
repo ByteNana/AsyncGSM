@@ -1,12 +1,12 @@
 #include "MqttQueue.h"
-#include "esp_log.h"
+
 #include <memory>
+
+#include "esp_log.h"
 
 AtomicMqttQueue::AtomicMqttQueue() {
   messageQueue = xQueueCreate(10, sizeof(MqttMessage *));
-  if (messageQueue == NULL) {
-    log_e("Failed to create message queue - CRITICAL");
-  }
+  if (messageQueue == NULL) { log_e("Failed to create message queue - CRITICAL"); }
 }
 
 AtomicMqttQueue::~AtomicMqttQueue() {
@@ -37,9 +37,7 @@ bool AtomicMqttQueue::pop(MqttMessage &msg) {
   if (xQueueReceive(messageQueue, &raw, 0) == pdTRUE) {
     std::unique_ptr<MqttMessage> uptr(raw);
     msg = *uptr;
-    if (uxQueueMessagesWaiting(messageQueue) == 0) {
-      hasMessage.store(false);
-    }
+    if (uxQueueMessagesWaiting(messageQueue) == 0) { hasMessage.store(false); }
     return true;
   }
   return false;

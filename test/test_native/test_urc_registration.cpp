@@ -1,4 +1,5 @@
 #include <AsyncGSM.h>
+
 #include <atomic>
 #include <string>
 
@@ -7,7 +8,7 @@
 using ::testing::NiceMock;
 
 class URCRegistrationTest : public FreeRTOSTest {
-protected:
+ protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
 
@@ -18,10 +19,12 @@ protected:
     mock->SetupDefaults();
   }
   void TearDown() override {
-    if (gsm)
+    if (gsm) {
+      gsm->context().end();
+      vTaskDelay(pdMS_TO_TICKS(80));
       delete gsm;
-    if (mock)
-      delete mock;
+    }
+    if (mock) delete mock;
     FreeRTOSTest::TearDown();
   }
 };
@@ -29,14 +32,17 @@ protected:
 TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mock));
+        bool began = gsm->context().begin(*mock);
+        EXPECT_TRUE(began);
+        if (!began) return;
 
         // Inject a successful open URC and verify state transitions to
         // CONNECTED
         InjectRx(mock, "\r\n+QIOPEN: 0,0\r\n");
         vTaskDelay(pdMS_TO_TICKS(20));
-        EXPECT_EQ(gsm->modem.URCState.isConnected.load(),
-                  ConnectionStatus::CONNECTED);
+        EXPECT_EQ(gsm->context().modem().URCState.isConnected.load(), ConnectionStatus::CONNECTED);
+        gsm->context().end();
+        vTaskDelay(pdMS_TO_TICKS(80));
       },
       "URC_QIOPEN", 8192, 2, 3000);
   EXPECT_TRUE(ok);
@@ -45,7 +51,9 @@ TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
 TEST_F(URCRegistrationTest, QIURCRecvDeferredUntilAvailable) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mock));
+        bool began = gsm->context().begin(*mock);
+        EXPECT_TRUE(began);
+        if (!began) return;
 
         // Clear any previous TX
         (void)mock->GetTxData();
@@ -60,6 +68,8 @@ TEST_F(URCRegistrationTest, QIURCRecvDeferredUntilAvailable) {
         vTaskDelay(pdMS_TO_TICKS(20));
         tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QIRD=0\r\n"), std::string::npos);
+        gsm->context().end();
+        vTaskDelay(pdMS_TO_TICKS(80));
       },
       "URC_QIURC_RECV", 8192, 2, 3000);
   EXPECT_TRUE(ok);

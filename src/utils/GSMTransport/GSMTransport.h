@@ -2,15 +2,15 @@
 
 #include <Arduino.h>
 #include <Stream.h>
+
 #include <deque>
 #include <vector>
 
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 
-#include "esp_log.h"
-
 class GSMTransport {
-public:
+ public:
   GSMTransport();
 
   void init(Stream &stream, SemaphoreHandle_t mutex);
@@ -26,7 +26,7 @@ public:
   int peek();
   void flush();
 
-private:
+ private:
   enum class Channel { TCP, SSL };
 
   void lock();

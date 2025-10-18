@@ -1,11 +1,13 @@
 #include "EG915.h"
-#include "GSMTransport.h"
-#include "esp_log.h"
-#include <MqttQueue/MqttQueue.h>
+
+#include <utils/GSMTransport/GSMTransport.h>
+#include <utils/MqttQueue/MqttQueue.h>
 
 #include <iomanip>
 #include <utility>
 #include <vector>
+
+#include "esp_log.h"
 
 static bool consumeOkResponse(Stream *stream) {
   String tail = "";
@@ -13,24 +15,18 @@ static bool consumeOkResponse(Stream *stream) {
     int c = stream->read();
     if (c >= 0) {
       tail += (char)c;
-      if (tail.endsWith("\r\nOK\r\n")) {
-        return true;
-      }
+      if (tail.endsWith("\r\nOK\r\n")) { return true; }
       // Prevent tail string from growing without bound
-      if (tail.length() > 8) {
-        tail.remove(0, tail.length() - 8);
-      }
+      if (tail.length() > 8) { tail.remove(0, tail.length() - 8); }
     }
   }
   return false;
 }
 
 void AsyncEG915U::registerURCs() {
-  if (!at)
-    return;
+  if (!at) return;
   // Helper to register and remember pattern
-  auto reg = [&](const String &pattern,
-                 std::function<void(const String &)> cb) {
+  auto reg = [&](const String &pattern, std::function<void(const String &)> cb) {
     at->urc.registerEvent(pattern, cb);
     registeredURCPatterns.push_back(pattern);
   };
@@ -63,11 +59,8 @@ void AsyncEG915U::registerURCs() {
 }
 
 void AsyncEG915U::unregisterURCs() {
-  if (!at)
-    return;
-  for (const auto &p : registeredURCPatterns) {
-    at->urc.unregisterEvent(p);
-  }
+  if (!at) return;
+  for (const auto &p : registeredURCPatterns) { at->urc.unregisterEvent(p); }
   registeredURCPatterns.clear();
 }
 
@@ -78,8 +71,7 @@ void AsyncEG915U::onRegChanged(const String &urc) {
   if (commaIndex != -1) {
     String statusStr = trimmed.substring(commaIndex + 1);
     int endPos = statusStr.indexOf(',');
-    if (endPos != -1)
-      statusStr = statusStr.substring(0, endPos);
+    if (endPos != -1) statusStr = statusStr.substring(0, endPos);
     URCState.creg.store((RegStatus)statusStr.toInt());
     log_v("URC: Registration status updated to %d", URCState.creg.load());
   }
@@ -88,15 +80,12 @@ void AsyncEG915U::onRegChanged(const String &urc) {
 void AsyncEG915U::onOpenResult(const String &urc) {
   String trimmed = urc;
   trimmed.trim();
-  if (transport) {
-    transport->reset();
-  }
+  if (transport) { transport->reset(); }
   int firstComma = trimmed.indexOf(',');
   if (firstComma != -1) {
     String resultStr = trimmed.substring(firstComma + 1);
     int endPos = resultStr.indexOf(',');
-    if (endPos != -1)
-      resultStr = resultStr.substring(0, endPos);
+    if (endPos != -1) resultStr = resultStr.substring(0, endPos);
     int result = resultStr.toInt();
     if (result == 0) {
       URCState.isConnected.store(ConnectionStatus::CONNECTED);
@@ -110,60 +99,46 @@ void AsyncEG915U::onOpenResult(const String &urc) {
 
 void AsyncEG915U::onClosed(const String & /*urc*/) {
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  if (transport) {
-    transport->reset();
-  }
+  if (transport) { transport->reset(); }
   log_d("URC: Connection closed");
 }
 
 void AsyncEG915U::onTcpRecv(const String & /*urc*/) {
   log_d("URC: Data received, ready to read with +QIRD");
-  if (transport) {
-    transport->notifyDataReady(false);
-  }
+  if (transport) { transport->notifyDataReady(false); }
 }
 
 void AsyncEG915U::onSslRecv(const String & /*urc*/) {
   log_d("URC: SSL Data received, ready to read with +QSSLRECV");
-  if (transport) {
-    transport->notifyDataReady(true);
-  }
+  if (transport) { transport->notifyDataReady(true); }
 }
 
 void AsyncEG915U::onReadData(const String &urc) {
   int headerStart = urc.indexOf(':');
   if (headerStart == -1) {
     log_e(">>>>>>>>>>>>URC: Failed to parse data length from +QIRD/+QSSLRECV");
-    if (transport) {
-      transport->deliverChunk(std::vector<uint8_t>());
-    }
+    if (transport) { transport->deliverChunk(std::vector<uint8_t>()); }
     return;
   }
   String header = urc.substring(headerStart + 1);
   int remaining = header.toInt();
   if (remaining < 0) {
     log_e(">>>>>>>>>>>QIRD: Invalid length");
-    if (transport) {
-      transport->deliverChunk(std::vector<uint8_t>());
-    }
+    if (transport) { transport->deliverChunk(std::vector<uint8_t>()); }
     return;
   }
   log_d("QIRD/QSSLRECV: Data length = %d", remaining);
   std::vector<uint8_t> chunk;
   chunk.reserve(remaining);
   while (remaining > 0) {
-    if (!at->getStream()->available())
-      continue;
+    if (!at->getStream()->available()) continue;
     int c = at->getStream()->read();
-    if (c < 0)
-      continue;
+    if (c < 0) continue;
     chunk.push_back(static_cast<uint8_t>(c));
     remaining--;
   }
   consumeOkResponse(at->getStream());
-  if (transport) {
-    transport->deliverChunk(std::move(chunk));
-  }
+  if (transport) { transport->deliverChunk(std::move(chunk)); }
 }
 
 void AsyncEG915U::onMqttRecv(const String &urc) {
@@ -181,14 +156,10 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
   String clientId = urc.substring(headerStart + 1, firstComma);
   clientId.trim();
   int numEnd = 0;
-  while (numEnd < afterFirstComma.length() &&
-         isDigit(afterFirstComma.charAt(numEnd))) {
-    numEnd++;
-  }
+  while (numEnd < afterFirstComma.length() && isDigit(afterFirstComma.charAt(numEnd))) { numEnd++; }
   String msgId = afterFirstComma.substring(0, numEnd);
   msgId.trim();
-  log_d("URC: MQTT message for client %d on topic ID %d", clientId.toInt(),
-        msgId.toInt());
+  log_d("URC: MQTT message for client %d on topic ID %d", clientId.toInt(), msgId.toInt());
   if (commaCount <= 1) {
     // QMTRECV=<client>,<msgid>
     at->getStream()->print("AT+QMTRECV=" + clientId + "," + msgId + "\r\n");

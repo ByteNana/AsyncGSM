@@ -1,4 +1,5 @@
 #include "AsyncGSM.h"
+
 #include "esp_log.h"
 
 bool AsyncGSM::isConnected() {
@@ -7,10 +8,10 @@ bool AsyncGSM::isConnected() {
 }
 
 bool AsyncGSM::modemConnect(const char *host, uint16_t port) {
-  return modem.connect(host, port);
+  return ctx->modem().connect(host, port);
 }
 
 bool AsyncGSM::modemStop() {
-  modem.stop();
+  ctx->modem().stop();
   return true;
 }

@@ -1,6 +1,8 @@
 #include "EG915.h"
-#include "esp_log.h"
+
 #include <MD5Builder.h>
+
+#include "esp_log.h"
 
 bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
   // Enable TLS 1.2
@@ -19,23 +21,18 @@ bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
   at->sendSync("AT+QSSLCFG=\"sni\",1,1");
 
   // Set security level: 1 when CA is configured, else 0 (insecure)
-  if (!at->sendSync(String("AT+QSSLCFG=\"seclevel\",1,") +
-                    (certConfigured ? "1" : "0"))) {
+  if (!at->sendSync(String("AT+QSSLCFG=\"seclevel\",1,") + (certConfigured ? "1" : "0"))) {
     log_e("Failed to set SSL security level");
     return false;
   }
 
   // Open SSL connection (PDP ctx=1, SSL ctx=1, clientid=0)
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) +
-               ",0");
+  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) + ",0");
 
   for (int i = 0; i < 20; i++) {
     ConnectionStatus status = URCState.isConnected.load();
-    if (status == ConnectionStatus::CONNECTED ||
-        status == ConnectionStatus::FAILED) {
-      break;
-    }
+    if (status == ConnectionStatus::CONNECTED || status == ConnectionStatus::FAILED) { break; }
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 
@@ -56,8 +53,8 @@ bool AsyncEG915U::stopSecure() {
   return true;
 }
 
-bool AsyncEG915U::uploadUFSFile(const char *path, const uint8_t *data,
-                                size_t size, uint32_t timeoutMs) {
+bool AsyncEG915U::uploadUFSFile(
+    const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs) {
   if (!path || !*path || !data || size == 0) {
     log_e("Invalid params for uploadUFSFile");
     return false;
@@ -67,8 +64,7 @@ bool AsyncEG915U::uploadUFSFile(const char *path, const uint8_t *data,
   uint32_t timeoutSec = (timeoutMs + 999) / 1000;
 
   // Start the upload
-  String cmd = String("AT+QFUPL=\"") + path + "\"," + String(size) + "," +
-               String(timeoutSec);
+  String cmd = String("AT+QFUPL=\"") + path + "\"," + String(size) + "," + String(timeoutSec);
   ATPromise *promise = at->sendCommand(cmd);
   if (!promise) {
     log_e("Failed to create promise for QFUPL");
@@ -115,36 +111,29 @@ bool AsyncEG915U::setCACertificate(const char *ufsPath) {
   return true;
 }
 
-bool AsyncEG915U::findUFSFile(const char *pattern, String *outName,
-                              size_t *outSize) {
-  if (!pattern || !*pattern)
-    return false;
+bool AsyncEG915U::findUFSFile(const char *pattern, String *outName, size_t *outSize) {
+  if (!pattern || !*pattern) return false;
   String resp;
   String cmd = String("AT+QFLST=\"") + pattern + "\"";
-  if (!at->sendSync(cmd, resp)) {
-    return false;
-  }
+  if (!at->sendSync(cmd, resp)) { return false; }
   int pos = resp.indexOf("+QFLST: ");
   if (pos == -1) {
-    return false; // no matches
+    return false;  // no matches
   }
   // Parse first match: +QFLST: "<name>",<size>
   int q1 = resp.indexOf('"', pos);
-  if (q1 == -1)
-    return false;
+  if (q1 == -1) return false;
   int q2 = resp.indexOf('"', q1 + 1);
-  if (q2 == -1)
-    return false;
+  if (q2 == -1) return false;
   String name = resp.substring(q1 + 1, q2);
-  if (outName)
-    *outName = name;
+  if (outName) *outName = name;
   if (outSize) {
     int comma = resp.indexOf(',', q2);
     if (comma != -1) {
       // read until end of line or next CR
       int lineEnd = resp.indexOf('\n', comma);
-      String sizeStr = (lineEnd == -1) ? resp.substring(comma + 1)
-                                       : resp.substring(comma + 1, lineEnd);
+      String sizeStr =
+          (lineEnd == -1) ? resp.substring(comma + 1) : resp.substring(comma + 1, lineEnd);
       sizeStr.trim();
       *outSize = static_cast<size_t>(sizeStr.toInt());
     }

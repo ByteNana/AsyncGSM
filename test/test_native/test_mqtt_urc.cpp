@@ -8,27 +8,26 @@
 
 using ::testing::NiceMock;
 
-static void startMqttCfgResponder(NiceMock<MockStream> *s,
-                                  std::atomic<bool> *done,
-                                  std::string *capture = nullptr) {
+static void startMqttCfgResponder(
+    NiceMock<MockStream> *s, std::atomic<bool> *done, std::string *capture = nullptr) {
   auto responder = [](void *pv) {
-    auto *ctx =
-        static_cast<std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
-                               std::string *> *>(pv);
+    using Ctx =
+        std::tuple<NiceMock<MockStream> *, std::atomic<bool> *, std::string *, std::atomic<bool> *>;
+    auto *ctx = static_cast<Ctx *>(pv);
     auto *s = std::get<0>(*ctx);
     auto *done = std::get<1>(*ctx);
     auto *cap = std::get<2>(*ctx);
+    auto *started = std::get<3>(*ctx);
 
     std::string acc;
     TickType_t start = xTaskGetTickCount();
     const TickType_t maxTicks = pdMS_TO_TICKS(10000);
+    if (started) started->store(true);
     while (!done->load()) {
-      if ((xTaskGetTickCount() - start) > maxTicks)
-        break;
+      if ((xTaskGetTickCount() - start) > maxTicks) break;
 
       std::string chunk = DrainTx(s);
-      if (!chunk.empty())
-        acc += chunk;
+      if (!chunk.empty()) acc += chunk;
 
       size_t pos;
       while ((pos = acc.find("\r\n")) != std::string::npos) {
@@ -58,32 +57,47 @@ static void startMqttCfgResponder(NiceMock<MockStream> *s,
       }
       vTaskDelay(pdMS_TO_TICKS(1));
     }
+    delete started;
     delete ctx;
     vTaskDelete(nullptr);
   };
-  auto *ctx = new std::tuple<NiceMock<MockStream> *, std::atomic<bool> *,
-                             std::string *>(s, done, capture);
-  xTaskCreate(responder, "MQTT_CFG_RESP", configMINIMAL_STACK_SIZE * 4, ctx, 1,
-              nullptr);
+  auto *started = new std::atomic<bool>(false);
+  auto *_ctx = new std::tuple<
+      NiceMock<MockStream> *, std::atomic<bool> *, std::string *, std::atomic<bool> *>(
+      s, done, capture, started);
+  xTaskCreate(responder, "MQTT_CFG_RESP", configMINIMAL_STACK_SIZE * 4, _ctx, 1, nullptr);
+  TickType_t t0 = xTaskGetTickCount();
+  while (!started->load() && (xTaskGetTickCount() - t0) < pdMS_TO_TICKS(50)) {
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
 }
 
 class MqttURCTest : public FreeRTOSTest {
-protected:
+ protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
-  AsyncMqttGSM mqtt;
+  AsyncMqttGSM *mqtt{nullptr};
+  GSMContext *ctx{};
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
-    gsm = new AsyncGSM();
     mock = new NiceMock<MockStream>();
     mock->SetupDefaults();
+    ctx = new GSMContext();
+    ASSERT_TRUE(ctx->begin(*mock));
+    gsm = new AsyncGSM(*ctx);
+    mqtt = new AsyncMqttGSM(*ctx);
   }
   void TearDown() override {
-    if (gsm)
-      delete gsm;
-    if (mock)
-      delete mock;
+    // Ensure background tasks are stopped before destroying stream/context
+    if (ctx) {
+      ctx->end();
+      vTaskDelay(pdMS_TO_TICKS(80));
+    }
+    if (gsm) delete gsm;
+    if (mock) delete mock;
+    if (mqtt) delete mqtt;
+    if (ctx) delete ctx;
     FreeRTOSTest::TearDown();
   }
 };
@@ -91,13 +105,11 @@ protected:
 TEST_F(MqttURCTest, QMTRECV_HeaderOnly_RequestsFetch) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mock));
-
         // Initialize MQTT helper (sends QMTCFG commands)
         std::atomic<bool> done{false};
         std::string cap;
         startMqttCfgResponder(mock, &done, &cap);
-        ASSERT_TRUE(mqtt.init(gsm->modem, gsm->getATHandler()));
+        ASSERT_TRUE(mqtt->init());
 
         // Clear any previous TX
         (void)mock->GetTxData();
@@ -119,24 +131,21 @@ TEST_F(MqttURCTest, QMTRECV_HeaderOnly_RequestsFetch) {
 TEST_F(MqttURCTest, QMTRECV_WithTopicPayload_QueuesAndCallback) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mock));
-
         std::atomic<bool> done{false};
         startMqttCfgResponder(mock, &done);
-        ASSERT_TRUE(mqtt.init(gsm->modem, gsm->getATHandler()));
+        ASSERT_TRUE(mqtt->init());
 
         // Mark MQTT as connected so loop processes queue
-        gsm->modem.URCState.mqttState.store(MqttConnectionState::CONNECTED);
+        gsm->context().modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
 
         // Capture callback
         std::atomic<bool> called{false};
         String gotTopic;
         String gotPayload;
-        mqtt.setCallback([&](char *topic, uint8_t *payload, unsigned int len) {
+        mqtt->setCallback([&](char *topic, uint8_t *payload, unsigned int len) {
           called = true;
           gotTopic = String(topic);
-          gotPayload =
-              String(reinterpret_cast<char *>(payload)).substring(0, len);
+          gotPayload = String(reinterpret_cast<char *>(payload)).substring(0, len);
         });
 
         // Inject a QMTRECV with topic and payload
@@ -144,7 +153,7 @@ TEST_F(MqttURCTest, QMTRECV_WithTopicPayload_QueuesAndCallback) {
 
         // Let the queue populate and the loop process
         for (int i = 0; i < 15 && !called.load(); ++i) {
-          mqtt.loop();
+          mqtt->loop();
           vTaskDelay(pdMS_TO_TICKS(20));
         }
 
@@ -162,14 +171,12 @@ TEST_F(MqttURCTest, QMTRECV_WithTopicPayload_QueuesAndCallback) {
 TEST_F(MqttURCTest, QMTSTAT_SetsDisconnected) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->init(*mock));
-
         // Initial state
-        gsm->modem.URCState.mqttState.store(MqttConnectionState::CONNECTED);
+        gsm->context().modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
         InjectRx(mock, "\r\n+QMTSTAT: 1,2\r\n");
         vTaskDelay(pdMS_TO_TICKS(20));
-        EXPECT_EQ(gsm->modem.URCState.mqttState.load(),
-                  MqttConnectionState::DISCONNECTED);
+        EXPECT_EQ(
+            gsm->context().modem().URCState.mqttState.load(), MqttConnectionState::DISCONNECTED);
       },
       "MQTT_QMTSTAT", 8192, 3, 3000);
   EXPECT_TRUE(ok);

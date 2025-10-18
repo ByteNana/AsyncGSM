@@ -1,4 +1,5 @@
 #include "EG915.h"
+
 #include "esp_log.h"
 
 bool AsyncEG915U::setPDPContext(const char *apn) {
@@ -21,8 +22,7 @@ bool AsyncEG915U::setPDPContext(const char *apn) {
 
 bool AsyncEG915U::isGPRSSAttached() {
   ATPromise *promise = at->sendCommand("AT+CGATT?");
-  if (!promise->wait() ||
-      !promise->getResponse()->containsResponse("+CGATT: 1")) {
+  if (!promise->wait() || !promise->getResponse()->containsResponse("+CGATT: 1")) {
     log_e("Failed to get GPRS attach status");
     at->popCompletedPromise(promise->getId());
     return false;
@@ -33,7 +33,7 @@ bool AsyncEG915U::isGPRSSAttached() {
 
 bool AsyncEG915U::activatePDP() {
   ATPromise *promise = at->sendCommand("AT+CGACT=1,1");
-  promise->timeout(20000); // Activation can take longer
+  promise->timeout(20000);  // Activation can take longer
   promise->expect("+CGACT: 1,1");
   if (!promise->wait() || !promise->getResponse()->isSuccess()) {
     log_e("Failed to activate PDP context");

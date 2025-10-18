@@ -1,17 +1,14 @@
 #include "EG915.h"
+
+#include <utils/GSMTransport/GSMTransport.h>
+
 #include "esp_log.h"
 
 AsyncEG915U::AsyncEG915U() {}
 
-AsyncEG915U::~AsyncEG915U() {
-  if (at) {
-    // Reader task will be stopped by end(); URC handlers are ephemeral
-    at->end();
-  }
-}
+AsyncEG915U::~AsyncEG915U() {}
 
-bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler,
-                       GSMTransport &transportRef) {
+bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler, GSMTransport &transportRef) {
   at = &atHandler;
   _stream = &stream;
   transport = &transportRef;
@@ -50,32 +47,27 @@ bool AsyncEG915U::checkTimezone() { return at->sendSync("AT+CTZU=1"); }
 
 bool AsyncEG915U::checkSIMReady() {
   String r;
-  if (!at->sendSync("AT+CPIN?", r))
-    return false;
+  if (!at->sendSync("AT+CPIN?", r)) return false;
   return r.indexOf("READY") != -1;
 }
 
 void AsyncEG915U::disableConnections() {
-  for (int i = 0; i < 4; i++) {
-    at->sendSync(String("AT+QICLOSE=") + String(i));
-  }
+  for (int i = 0; i < 4; i++) { at->sendSync(String("AT+QICLOSE=") + String(i)); }
 }
 
 bool AsyncEG915U::disalbeSleepMode() { return at->sendSync("AT+QSCLK=0"); }
 
 bool AsyncEG915U::checkNetworkContext() {
   String r;
-  if (!at->sendSync("AT+QIACT?", r))
-    return false;
+  if (!at->sendSync("AT+QIACT?", r)) return false;
   return r.indexOf("+QIACT: 1,1") != -1;
 }
 
-bool AsyncEG915U::gprsConnect(const char *apn, const char *user,
-                              const char *pass) {
+bool AsyncEG915U::gprsConnect(const char *apn, const char *user, const char *pass) {
   gprsDisconnect();
   setPDPContext(apn);
-  String cmd = String("AT+QICSGP=1,1,\"") + apn + "\",\"" + (user ? user : "") +
-               "\",\"" + (pass ? pass : "") + "\",1";
+  String cmd = String("AT+QICSGP=1,1,\"") + apn + "\",\"" + (user ? user : "") + "\",\"" +
+               (pass ? pass : "") + "\",1";
   if (!at->sendSync(cmd)) {
     log_e("Failed to set APN");
     return false;
@@ -94,9 +86,7 @@ bool AsyncEG915U::gprsConnect(const char *apn, const char *user,
 
   activatePDP();
 
-  if (!checkNetworkContext()) {
-    return false;
-  }
+  if (!checkNetworkContext()) { return false; }
 
   return true;
 }
@@ -187,20 +177,30 @@ String AsyncEG915U::getIPAddress() {
   return result;
 }
 
-bool AsyncEG915U::stop() { return at->sendSync("AT+QICLOSE=0"); }
+bool AsyncEG915U::stop() {
+  // Request close
+  bool ok = at->sendSync("AT+QICLOSE=0");
+  // Wait briefly for URC to arrive and update state; under heavy logs this can be delayed
+  if (ok) {
+    TickType_t t0 = xTaskGetTickCount();
+    while (URCState.isConnected.load() != ConnectionStatus::DISCONNECTED &&
+           (xTaskGetTickCount() - t0) < pdMS_TO_TICKS(2000)) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
+    if (transport) { transport->reset(); }
+  }
+  return ok;
+}
 
 bool AsyncEG915U::connect(const char *host, uint16_t port) {
   String portStr(port);
   URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  at->sendSync(String("AT+QIOPEN=1,0,\"TCP\",\"") + host + "\"," + portStr +
-               ",0,0");
+  at->sendSync(String("AT+QIOPEN=1,0,\"TCP\",\"") + host + "\"," + portStr + ",0,0");
 
   for (int i = 0; i < 20; i++) {
     ConnectionStatus status = URCState.isConnected.load();
-    if (status == ConnectionStatus::CONNECTED ||
-        status == ConnectionStatus::FAILED) {
-      break;
-    }
+    if (status == ConnectionStatus::CONNECTED || status == ConnectionStatus::FAILED) { break; }
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 
