@@ -35,9 +35,9 @@ class AsyncMqttGSM {
 
   AsyncMqttGSM &setServer(const char *domain, uint16_t port);
   uint8_t connected();
-  bool connect(const char *id, const char *user, const char *pass);
-  bool publish(const char *topic, const uint8_t *payload, unsigned int plength);
-  bool subscribe(const char *topic);
+  virtual bool connect(const char *id, const char *user, const char *pass);
+  virtual bool publish(const char *topic, const uint8_t *payload, unsigned int plength);
+  virtual bool subscribe(const char *topic);
   bool subscribe(const char *topic, uint8_t qos);
   bool unsubscribe(const char *topic);
   AsyncMqttGSM &setCallback(AsyncMqttGSMCallback callback);
@@ -45,6 +45,5 @@ class AsyncMqttGSM {
 
  protected:
   const char *cidx = "1";
-  void setSecurityLevel(bool secure);
   virtual bool isSecure() const { return false; }
 };

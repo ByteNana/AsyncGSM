@@ -4,6 +4,31 @@
 
 #include "esp_log.h"
 
+void AsyncSecureMqttGSM::setSecurityLevel(bool secure) {
+  auto &at = context().at();
+
+  String secureLevel = (isSecure() ? "1" : "0");
+  // Enable SSL for the MQTT client and bind to SSL context index
+  if (!at.sendSync(String("AT+QMTCFG=\"ssl\",") + cidx + "," + secureLevel + "," + ssl_cidx)) {
+    log_e("Failed to set SSL for MQTT");
+  }
+}
+
+bool AsyncSecureMqttGSM::connect(const char *id, const char *user, const char *pass) {
+  setSecurityLevel(isSecure());
+  return AsyncMqttGSM::connect(id, user, pass);
+}
+
+bool AsyncSecureMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned int plength) {
+  setSecurityLevel(isSecure());
+  return AsyncMqttGSM::publish(topic, payload, plength);
+}
+
+bool AsyncSecureMqttGSM::subscribe(const char *topic) {
+  setSecurityLevel(isSecure());
+  return AsyncMqttGSM::subscribe(topic, 0);
+}
+
 void AsyncSecureMqttGSM::setCACert(const char *rootCA) {
   if (!rootCA || !*rootCA) { return; }
 
@@ -22,7 +47,7 @@ void AsyncSecureMqttGSM::setCACert(const char *rootCA) {
     context().modem().uploadUFSFile(
         filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA));
   }
-  // Our modem driver currently targets SSL context 1 for cacert
-  context().modem().setCACertificate(filename, cidx);
+
+  context().modem().setCACertificate(filename, ssl_cidx);
   caMd5Cache = newMd5;
 }

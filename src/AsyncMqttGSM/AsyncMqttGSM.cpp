@@ -71,22 +71,10 @@ uint8_t AsyncMqttGSM::connected() {
   return ctx->modem().URCState.mqttState.load() == MqttConnectionState::CONNECTED;
 }
 
-void AsyncMqttGSM::setSecurityLevel(bool secure) {
-  auto &at = context().at();
-
-  String secureLevel = (isSecure() ? "1" : "0");
-  // Enable SSL for the MQTT client and bind to SSL context index
-  if (!at.sendSync("AT+QMTCFG=\"ssl\"," + secureLevel + "," + cidx)) {
-    log_e("Failed to set SSL for MQTT");
-  }
-}
-
 bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) {
   this->apn = apn;
   this->user = user;
   this->pass = pass;
-
-  setSecurityLevel(isSecure());
 
   // restarts connection process
   ctx->modem().URCState.mqttState.store(MqttConnectionState::IDLE);
@@ -133,7 +121,6 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
 }
 
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned int plength) {
-  setSecurityLevel(isSecure());
   // Client: 0, msgId: 1, qos: 1, retain: 0
   String cmd = String("AT+QMTPUBEX=") + cidx + ",1,1,0,\"" + topic + "\"," + String(plength);
   ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
@@ -171,7 +158,6 @@ bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned i
 bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
-  setSecurityLevel(isSecure());
   subscribedTopics.insert(topic);
   // Client: 0, msgId: 1, topic, qos
   String cmd = String("AT+QMTSUB=") + cidx + ",1,\"" + topic + "\"," + String(qos);

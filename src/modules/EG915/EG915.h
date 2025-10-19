@@ -58,7 +58,7 @@ class AsyncEG915U {
 
   bool uploadUFSFile(
       const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs = 120000);
-  bool setCACertificate(const char *ufsPath, const char *cidx = "1");
+  bool setCACertificate(const char *ufsPath, const char *ssl_cidx);
   bool findUFSFile(const char *pattern, String *outName = nullptr, size_t *outSize = nullptr);
 
   // Helpers for GPRS connection
