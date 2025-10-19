@@ -29,12 +29,6 @@ class AsyncGSM : public Client {
   virtual uint8_t connected() override;
   operator bool() override { return connected(); }
 
-  // Information methods
-  String getSimCCID();
-  String getIMEI();
-  String getOperator();
-  String getIPAddress();
-
   // Connection management
   bool isConnected();
   bool gprsDisconnect();
