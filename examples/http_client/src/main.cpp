@@ -14,8 +14,8 @@ HttpClient http(modem, server, port);
 void setup() {
   Serial.begin(115200);
   SerialAT.begin(115200);
-  modem.init(SerialAT);
-  modem.begin("internet");
+  modem.context().begin(SerialAT);
+  modem.context().setupNetwork("your_apn_here");
 }
 
 void loop() {

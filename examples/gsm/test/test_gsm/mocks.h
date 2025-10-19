@@ -4,12 +4,12 @@
 #include <Stream.h>
 
 class HardwareMockStream : public Stream {
-private:
-  String _rxBuffer; // Holds the data we want the device to "receive"
-  String _txBuffer; // Captures the data our code "sends"
+ private:
+  String _rxBuffer;  // Holds the data we want the device to "receive"
+  String _txBuffer;  // Captures the data our code "sends"
   int _rxReadIndex = 0;
 
-public:
+ public:
   HardwareMockStream() {}
   void mockResponse(const String &response) {
     _rxBuffer = response;
@@ -21,16 +21,12 @@ public:
   virtual int available() override { return _rxBuffer.length() - _rxReadIndex; }
 
   virtual int read() override {
-    if (_rxReadIndex < _rxBuffer.length()) {
-      return _rxBuffer.charAt(_rxReadIndex++);
-    }
+    if (_rxReadIndex < _rxBuffer.length()) { return _rxBuffer.charAt(_rxReadIndex++); }
     return -1;
   }
 
   virtual int peek() override {
-    if (_rxReadIndex < _rxBuffer.length()) {
-      return _rxBuffer.charAt(_rxReadIndex);
-    }
+    if (_rxReadIndex < _rxBuffer.length()) { return _rxBuffer.charAt(_rxReadIndex); }
     return -1;
   }
 
@@ -40,9 +36,7 @@ public:
   }
 
   virtual size_t write(const uint8_t *buffer, size_t size) override {
-    for (size_t i = 0; i < size; i++) {
-      _txBuffer += (char)buffer[i];
-    }
+    for (size_t i = 0; i < size; i++) { _txBuffer += (char)buffer[i]; }
     return size;
   }
 
