@@ -43,6 +43,6 @@ void AsyncSecureGSM::setCACert(const char *rootCA) {
     ctx->modem().uploadUFSFile(filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA));
   }
   log_i("Configuring CA cert for SSL");
-  ctx->modem().setCACertificate(filename);
+  ctx->modem().setCACertificate(filename, ssl_cidx);
   caMd5 = newMd5;
 }

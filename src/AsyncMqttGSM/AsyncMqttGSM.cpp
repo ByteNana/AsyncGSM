@@ -2,8 +2,6 @@
 
 #include "esp_log.h"
 
-const String cidx = "1";
-
 AsyncMqttGSM::AsyncMqttGSM(GSMContext &context) {
   ctx = &context;
   ctx->modem().mqttQueueSub = &mqttQueueSub;
@@ -27,36 +25,36 @@ AsyncMqttGSM::~AsyncMqttGSM() {
 bool AsyncMqttGSM::init() {
   log_d("Initializing AsyncMqttGSM...");
 
-  if (!ctx->at().sendSync("AT+QMTCFG=\"recv/mode\"," + cidx + ",1")) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"recv/mode\",") + cidx + ",1")) {
     log_e("Failed to set Receive mode");
     return false;
   }
 
-  if (!ctx->at().sendSync("AT+QMTCFG=\"version\"," + cidx + ",4")) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"version\",") + cidx + ",4")) {
     log_e("Failed to set MQTT version");
     return false;
   }
 
   // Set PDP context ID to 1
-  if (!ctx->at().sendSync("AT+QMTCFG=\"pdpcid\"," + cidx)) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"pdpcid\",") + cidx)) {
     log_e("Failed to set PDP context ID");
     return false;
   }
 
   // Set keepalive to 60 seconds
-  if (!ctx->at().sendSync("AT+QMTCFG=\"keepalive\"," + cidx + ",120")) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"keepalive\",") + cidx + ",120")) {
     log_e("Failed to set keepalive");
     return false;
   }
 
   // Set clean session to 1 (true)
-  if (!ctx->at().sendSync("AT+QMTCFG=\"session\"," + cidx + ",0")) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"session\",") + cidx + ",0")) {
     log_e("Failed to set session");
     return false;
   }
 
   // Set command timeout to 5 seconds, 3 retries, no exponential backoff
-  if (!ctx->at().sendSync("AT+QMTCFG=\"timeout\"," + cidx + ",5,3,0")) {
+  if (!ctx->at().sendSync(String("AT+QMTCFG=\"timeout\",") + cidx + ",5,3,0")) {
     log_e("Failed to set timeout");
     return false;
   }
@@ -77,11 +75,12 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
   this->apn = apn;
   this->user = user;
   this->pass = pass;
+
   // restarts connection process
   ctx->modem().URCState.mqttState.store(MqttConnectionState::IDLE);
 
-  ATPromise *mqttPromise =
-      ctx->at().sendCommand("AT+QMTOPEN=" + cidx + ",\"" + String(domain) + "\"," + String(port));
+  ATPromise *mqttPromise = ctx->at().sendCommand(
+      String("AT+QMTOPEN=") + cidx + ",\"" + String(domain) + "\"," + String(port));
   if (!mqttPromise->wait()) {
     log_e("Failed to open MQTT connection");
     ctx->at().popCompletedPromise(mqttPromise->getId());
@@ -91,7 +90,7 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
 
   // Wait on +QMTOPEN URC
   mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect("+QMTOPEN: " + cidx + ",0")->wait()) {
+  if (!mqttPromise->expect(String("+QMTOPEN: ") + cidx + ",0")->wait()) {
     log_e("Failed to get MQTT open URC");
     ctx->at().popCompletedPromise(mqttPromise->getId());
     return false;
@@ -99,7 +98,7 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
   mqttPromise = ctx->at().sendCommand(
-      String("AT+QMTCONN=" + cidx + ",\"") + apn + "\",\"" + (user ? user : "") + "\",\"" +
+      String("AT+QMTCONN=") + cidx + ",\"" + apn + "\",\"" + (user ? user : "") + "\",\"" +
       (pass ? pass : "") + "\"");
 
   if (!mqttPromise->wait()) {
@@ -110,7 +109,7 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
   mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect("+QMTCONN: " + cidx + ",0,0")->wait()) {
+  if (!mqttPromise->expect(String("+QMTCONN: ") + cidx + ",0,0")->wait()) {
     log_e("Failed to get MQTT Connection URC");
     ctx->at().popCompletedPromise(mqttPromise->getId());
     return false;
@@ -123,7 +122,7 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
 
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned int plength) {
   // Client: 0, msgId: 1, qos: 1, retain: 0
-  String cmd = String("AT+QMTPUBEX=" + cidx + ",1,1,0,\"") + topic + "\"," + String(plength);
+  String cmd = String("AT+QMTPUBEX=") + cidx + ",1,1,0,\"" + topic + "\"," + String(plength);
   ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
   if (!mqttPromise->expect(">")->wait()) {
     log_e("Failed to publish MQTT topic");
@@ -145,8 +144,8 @@ bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned i
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
   mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect("+QMTPUBEX: " + cidx)->wait() ||
-      !mqttPromise->getResponse()->containsResponse("+QMTPUBEX: " + cidx + ",1,0")) {
+  if (!mqttPromise->expect(String("+QMTPUBEX: ") + cidx)->wait() ||
+      !mqttPromise->getResponse()->containsResponse(String("+QMTPUBEX: ") + cidx + ",1,0")) {
     log_e("Failed to get MQTT publish confirmation");
     ctx->at().popCompletedPromise(mqttPromise->getId());
     return false;
@@ -161,7 +160,7 @@ bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
   subscribedTopics.insert(topic);
   // Client: 0, msgId: 1, topic, qos
-  String cmd = String("AT+QMTSUB=" + cidx + ",1,\"") + topic + "\"," + String(qos);
+  String cmd = String("AT+QMTSUB=") + cidx + ",1,\"" + topic + "\"," + String(qos);
   ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
   if (!mqttPromise->wait()) {
     log_e("Failed to subscribe MQTT topic");
@@ -171,7 +170,7 @@ bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
   mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect("+QMTSUB: " + cidx + ",1,0")->wait()) {
+  if (!mqttPromise->expect(String("+QMTSUB: ") + cidx + ",1,0")->wait()) {
     log_e("Failed to get MQTT subscribe confirmctx->ation");
     ctx->at().popCompletedPromise(mqttPromise->getId());
     return false;
@@ -181,7 +180,7 @@ bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
 }
 
 bool AsyncMqttGSM::unsubscribe(const char *topic) {
-  String cmd = String("AT+QMTUNSUB=" + cidx + ",1,\"") + topic + "\"";
+  String cmd = String("AT+QMTUNSUB=") + cidx + ",1,\"" + topic + "\"";
   ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
   if (!mqttPromise->wait()) {
     log_e("Failed to unsubscribe MQTT topic");
@@ -191,7 +190,7 @@ bool AsyncMqttGSM::unsubscribe(const char *topic) {
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
   mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect("+QMTUNSUB: " + cidx + ",1,0")->wait()) {
+  if (!mqttPromise->expect(String("+QMTUNSUB: ") + cidx + ",1,0")->wait()) {
     log_e("Failed to get MQTT unsubscribe confirmctx->ation");
     ctx->at().popCompletedPromise(mqttPromise->getId());
     return false;
