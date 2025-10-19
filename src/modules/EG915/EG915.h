@@ -48,6 +48,7 @@ class AsyncEG915U {
   bool gprsDisconnect();
   String getSimCCID();
   String getIMEI();
+  String getIMSI();
   String getOperator();
   String getIPAddress();
   bool connect(const char *host, uint16_t port);

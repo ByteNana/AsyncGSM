@@ -137,6 +137,22 @@ String AsyncEG915U::getIMEI() {
   return imei;
 }
 
+String AsyncEG915U::getIMSI() {
+  String imsi;
+  if (!at->sendSync("AT+CIMI", imsi)) {
+    log_e("Failed to get IMSI");
+    return "";
+  }
+  int idx = imsi.indexOf("\r\n");
+  if (idx == -1) {
+    log_e("No IMSI response found");
+    return "";
+  }
+  imsi = imsi.substring(idx);
+  imsi.trim();
+  return imsi;
+}
+
 String AsyncEG915U::getOperator() {
   String cops;
   if (!at->sendSync("AT+COPS?", cops)) {
