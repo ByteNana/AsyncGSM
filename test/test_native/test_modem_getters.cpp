@@ -36,9 +36,7 @@ TEST_F(ModemGettersTest, GetSimCCID) {
         ASSERT_TRUE(ctx->begin(*mock));
         // Provide +QCCID for AT+CCID query
         (void)mock->GetTxData();
-        scheduleInject(
-            mock, 10,
-            "\r\n+QCCID: 01234567890123456789\r\nOK\r\n");
+        scheduleInject(mock, 10, "\r\n+QCCID: 01234567890123456789\r\nOK\r\n");
 
         String ccid = ctx->modem().getSimCCID();
         EXPECT_EQ(ccid.substring(0, 20), String("01234567890123456789"));
