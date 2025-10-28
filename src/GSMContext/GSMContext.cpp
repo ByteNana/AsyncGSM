@@ -33,14 +33,21 @@ bool GSMContext::setupNetwork(const char *apn) {
   if (!modemDriver.checkModemModel()) return false;
   if (!modemDriver.checkTimezone()) return false;
 
-  while (true) {
+  bool simReady = false;
+  uint8_t retries = 0;
+  do {
     log_w("Waiting for SIM card...");
-    if (modemDriver.checkSIMReady()) {
-      log_d("SIM card is ready.");
-      break;
-    }
     delay(1000);
+    simReady = modemDriver.checkSIMReady();
+    retries++;
+  } while (!simReady && retries < 10);
+
+  if (!simReady) {
+    log_e("SIM card not ready");
+    return false;
   }
+
+  log_d("SIM card is ready.");
 
   modemDriver.disableConnections();
   modemDriver.disalbeSleepMode();
