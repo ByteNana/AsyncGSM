@@ -4,6 +4,7 @@
 
 bool AsyncEG915U::setPDPContext(const char *apn) {
   ATPromise *promise = at->sendCommand("AT+CREG?");
+  int attempts = 0;
   while (URCState.creg.load() != RegStatus::REG_OK_HOME &&
          URCState.creg.load() != RegStatus::REG_OK_ROAMING) {
     log_v("Waiting for network registration...");
@@ -15,6 +16,11 @@ bool AsyncEG915U::setPDPContext(const char *apn) {
       return false;
     }
     at->popCompletedPromise(promise->getId());
+    attempts++;
+    if (attempts >= 10) {
+      log_e("Network registration timed out");
+      return false;
+    }
   }
   // Set the PDP context
   return at->sendSync(String("AT+CGDCONT=1,\"IP\",\"") + apn + "\"");
