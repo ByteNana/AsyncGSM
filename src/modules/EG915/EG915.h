@@ -6,6 +6,7 @@
 #include <utils/MqttQueue/MqttQueue.h>
 
 #include "EG915.settings.h"
+#include "SIMCard/SIMCard.h"
 
 class GSMTransport;
 
@@ -34,6 +35,7 @@ class AsyncEG915U {
  public:
   UrcState URCState;
   AtomicMqttQueue *mqttQueueSub = nullptr;
+  EG915SIMCard sim;
 
   AsyncEG915U();
   ~AsyncEG915U();
@@ -56,6 +58,7 @@ class AsyncEG915U {
   bool connectSecure(const char *host, uint16_t port);
   bool connectSecure(const char *host, uint16_t port, const char *caCertPath);
   bool stopSecure();
+  bool setSIMSlot(EG915SimSlot slot);
 
   bool uploadUFSFile(
       const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs = 120000);

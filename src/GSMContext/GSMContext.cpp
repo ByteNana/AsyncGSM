@@ -4,7 +4,8 @@
 
 GSMContext::GSMContext() { rxMutex = xSemaphoreCreateMutex(); }
 
-bool GSMContext::begin(Stream &stream) {
+bool GSMContext::begin(Stream &stream, EG915SimSlot simSlot) {
+  this->simSlot = simSlot;
   ioStream = &stream;
   if (!atHandler.begin(stream)) {
     log_e("Failed to initialize AsyncATHandler");
@@ -32,6 +33,7 @@ bool GSMContext::setupNetwork(const char *apn) {
   if (!modemDriver.enableVerboseErrors()) return false;
   if (!modemDriver.checkModemModel()) return false;
   if (!modemDriver.checkTimezone()) return false;
+  if (!modemDriver.setSIMSlot(simSlot)) return false;
 
   bool simReady = false;
   uint8_t retries = 0;

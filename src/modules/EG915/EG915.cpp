@@ -14,6 +14,8 @@ bool AsyncEG915U::init(Stream &stream, AsyncATHandler &atHandler, GSMTransport &
   transport = &transportRef;
   // Register dynamic URC handlers
   registerURCs();
+  // Initialize submodules
+  sim.init(atHandler);
   return true;
 }
 
