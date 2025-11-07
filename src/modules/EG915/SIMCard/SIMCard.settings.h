@@ -26,11 +26,6 @@ struct EG915SimDetConfig {
   InsertLevel insertLevel{InsertLevel::LOW_LEVEL};
 };
 
-struct EG915SimDetDual {
-  EG915SimDetConfig sim1;
-  EG915SimDetConfig sim2;
-};
-
 // =========================================================
 // SIM Status Reporting ( +QSIMSTAT )
 // =========================================================

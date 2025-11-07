@@ -159,19 +159,17 @@ TEST_F(SimQDSIMTest, SetSlotNoOpWhenSame) {
 
 // === QSIMDET and QSIMSTAT tests merged here ===
 
-TEST_F(SimQDSIMTest, QSIMDETParsesBothSlots) {
+TEST_F(SimQDSIMTest, QSIMDETParsesSingleSlot) {
   bool ok = runInFreeRTOSTask(
       [this]() {
         ASSERT_TRUE(ctx->begin(*mock));
         (void)mock->GetTxData();
-        // +QSIMDET: (1,1),(0,0)
-        scheduleInject(mock, 10, "\r\n+QSIMDET: (1,1),(0,0)\r\nOK\r\n");
+        // +QSIMDET: 1,1
+        scheduleInject(mock, 10, "\r\n+QSIMDET: 1,1\r\nOK\r\n");
 
-        EG915SimDetDual det = ctx->modem().sim.getDetection();
-        EXPECT_EQ(det.sim1.cardDetection, EG915SimDetConfig::CardDetection::ENABLE);
-        EXPECT_EQ(det.sim1.insertLevel, EG915SimDetConfig::InsertLevel::HIGH_LEVEL);
-        EXPECT_EQ(det.sim2.cardDetection, EG915SimDetConfig::CardDetection::DISABLE);
-        EXPECT_EQ(det.sim2.insertLevel, EG915SimDetConfig::InsertLevel::LOW_LEVEL);
+        EG915SimDetConfig det = ctx->modem().sim.getDetection();
+        EXPECT_EQ(det.cardDetection, EG915SimDetConfig::CardDetection::ENABLE);
+        EXPECT_EQ(det.insertLevel, EG915SimDetConfig::InsertLevel::HIGH_LEVEL);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QSIMDET?\r\n"), std::string::npos);

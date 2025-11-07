@@ -6,36 +6,29 @@ EG915SIMCard::EG915SIMCard(AsyncATHandler &handler) { init(handler); }
 
 void EG915SIMCard::init(AsyncATHandler &handler) { at = &handler; }
 
-static bool parseQSIMDET(const String &resp, EG915SimDetDual &out) {
+static bool parseQSIMDET(const String &resp, EG915SimDetConfig &out) {
   int pos = resp.indexOf("+QSIMDET:");
   if (pos < 0) return false;
   int lineEnd = resp.indexOf('\n', pos);
   String line = (lineEnd >= 0) ? resp.substring(pos, lineEnd) : resp.substring(pos);
-  // Expected: +QSIMDET: (e1,l1),(e2,l2)
-  int firstParen = line.indexOf('(');
-  int secondParen = line.indexOf(')', firstParen + 1);
-  int commaBetween = line.indexOf(',', secondParen + 1);
-  int thirdParen = line.indexOf('(', commaBetween + 1);
-  int fourthParen = line.indexOf(')', thirdParen + 1);
-  if (firstParen < 0 || secondParen < 0 || thirdParen < 0 || fourthParen < 0) return false;
-  String t1 = line.substring(firstParen + 1, secondParen);
-  String t2 = line.substring(thirdParen + 1, fourthParen);
-  t1.trim();
-  t2.trim();
-  auto parseTuple = [](const String &t, EG915SimDetConfig &cfg) {
-    int comma = t.indexOf(',');
-    if (comma < 0) return false;
-    String e = t.substring(0, comma);
-    String l = t.substring(comma + 1);
-    e.trim();
-    l.trim();
-    if (e.length() == 0 || l.length() == 0) return false;
-    cfg.cardDetection = static_cast<EG915SimDetConfig::CardDetection>(e.toInt());
-    cfg.insertLevel = static_cast<EG915SimDetConfig::InsertLevel>(l.toInt());
-    return u8(cfg.cardDetection) <= 1 && u8(cfg.insertLevel) <= 1;
-  };
-  if (!parseTuple(t1, out.sim1)) return false;
-  if (!parseTuple(t2, out.sim2)) return false;
+  // Expected: +QSIMDET: <cardDetection>,<insertLevel>
+  int colon = line.indexOf(':');
+  if (colon < 0) return false;
+  String payload = line.substring(colon + 1);
+  payload.trim();
+  int comma = payload.indexOf(',');
+  if (comma < 0) return false;
+  String e = payload.substring(0, comma);
+  String l = payload.substring(comma + 1);
+  e.trim();
+  l.trim();
+  if (e.length() == 0 || l.length() == 0) return false;
+  int ei = e.toInt();
+  int li = l.toInt();
+  if (ei < 0 || ei > 1) return false;
+  if (li < 0 || li > 1) return false;
+  out.cardDetection = static_cast<EG915SimDetConfig::CardDetection>(ei);
+  out.insertLevel = static_cast<EG915SimDetConfig::InsertLevel>(li);
   return true;
 }
 
@@ -80,8 +73,8 @@ static bool parseQSIMSTAT(const String &resp, EG915SimStatus &out) {
   return true;
 }
 
-EG915SimDetDual EG915SIMCard::getDetection() {
-  EG915SimDetDual out{};
+EG915SimDetConfig EG915SIMCard::getDetection() {
+  EG915SimDetConfig out{};
   if (!at) return out;
   String resp;
   if (!at->sendSync("AT+QSIMDET?", resp)) return out;

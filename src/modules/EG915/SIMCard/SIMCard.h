@@ -11,7 +11,7 @@ class EG915SIMCard {
   explicit EG915SIMCard(AsyncATHandler &handler);
 
   void init(AsyncATHandler &handler);
-  EG915SimDetDual getDetection();
+  EG915SimDetConfig getDetection();
   EG915SimStatus getStatus();
   bool setStatusReport(bool enable);
 
