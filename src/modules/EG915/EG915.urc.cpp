@@ -15,7 +15,7 @@ static bool consumeOkResponse(Stream *stream) {
     int c = stream->read();
     if (c >= 0) {
       tail += (char)c;
-      if (tail.endsWith("\r\nOK\r\n")) { return true; }
+      if (tail.endsWith("OK\r\n")) { return true; }
       // Prevent tail string from growing without bound
       if (tail.length() > 8) { tail.remove(0, tail.length() - 8); }
     }
