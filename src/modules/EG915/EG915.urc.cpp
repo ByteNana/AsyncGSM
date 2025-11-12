@@ -47,7 +47,6 @@ void AsyncEG915U::registerURCs() {
 
   // Data-ready notifications
   reg("+QIURC: \"recv\"", [this](const String &u) { onTcpRecv(u); });
-  reg("+QSSLURC: \"recv\"", [this](const String &u) { onSslRecv(u); });
 
   // Read data notifications
   reg("+QIRD:", [this](const String &u) { onReadData(u); });
@@ -98,8 +97,7 @@ void AsyncEG915U::onOpenResult(const String &urc) {
 }
 
 void AsyncEG915U::onClosed(const String & /*urc*/) {
-  URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  if (transport) { transport->reset(); }
+  URCState.isConnected.store(ConnectionStatus::CLOSING);
   log_d("URC: Connection closed");
 }
 

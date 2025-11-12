@@ -101,9 +101,19 @@ size_t AsyncGSM::write(const uint8_t *buf, size_t size) {
 
 int AsyncGSM::available() { return static_cast<int>(ctx->transport().available()); }
 
-int AsyncGSM::read() { return ctx->transport().read(); }
+int AsyncGSM::read() {
+  if (ctx->modem().URCState.isConnected.load() == ConnectionStatus::CLOSING && available() == 0) {
+    ctx->modem().URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
+    return -1;
+  }
+  return ctx->transport().read();
+}
 
 int AsyncGSM::read(uint8_t *buf, size_t size) {
+  if (ctx->modem().URCState.isConnected.load() == ConnectionStatus::CLOSING && available() == 0) {
+    ctx->modem().URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
+    return 0;
+  }
   return static_cast<int>(ctx->transport().read(buf, size));
 }
 
@@ -119,5 +129,6 @@ void AsyncGSM::flush() {
 }
 
 uint8_t AsyncGSM::connected() {
-  return ctx->modem().URCState.isConnected.load() == ConnectionStatus::CONNECTED;
+  auto status = ctx->modem().URCState.isConnected.load();
+  return status == ConnectionStatus::CONNECTED || status == ConnectionStatus::CLOSING;
 }
