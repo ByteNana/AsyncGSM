@@ -130,10 +130,22 @@ void AsyncEG915U::onReadData(const String &urc) {
   log_d("QIRD/QSSLRECV: Data length = %d", remaining);
   std::vector<uint8_t> chunk;
   chunk.reserve(remaining);
+  unsigned long startTime = millis();
+  const unsigned long timeout = 5000;  // 5-second timeout
   while (remaining > 0) {
-    if (!at->getStream()->available()) continue;
+    if (millis() - startTime > timeout) {
+      log_e("Timeout reading data from modem");
+      break;
+    }
+    if (!at->getStream()->available()) {
+      vTaskDelay(1);  // Yield to other tasks
+      continue;
+    }
     int c = at->getStream()->read();
-    if (c < 0) continue;
+    if (c < 0) {
+      vTaskDelay(1);
+      continue;
+    }
     chunk.push_back(static_cast<uint8_t>(c));
     remaining--;
   }
