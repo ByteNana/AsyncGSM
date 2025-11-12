@@ -131,14 +131,14 @@ void AsyncEG915U::onReadData(const String &urc) {
   std::vector<uint8_t> chunk;
   chunk.reserve(remaining);
   unsigned long startTime = millis();
-  const unsigned long timeout = 5000;  // 5-second timeout
+  const unsigned long timeout = 5000;
   while (remaining > 0) {
     if (millis() - startTime > timeout) {
       log_e("Timeout reading data from modem");
       break;
     }
     if (!at->getStream()->available()) {
-      vTaskDelay(1);  // Yield to other tasks
+      vTaskDelay(1);
       continue;
     }
     int c = at->getStream()->read();
@@ -150,6 +150,7 @@ void AsyncEG915U::onReadData(const String &urc) {
     remaining--;
   }
   consumeOkResponse(at->getStream());
+  log_v("Chunk: %.*s", chunk.size(), (char*)chunk.data());
   if (transport) { transport->deliverChunk(std::move(chunk)); }
 }
 
