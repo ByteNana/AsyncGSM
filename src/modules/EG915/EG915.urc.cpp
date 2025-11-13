@@ -148,7 +148,7 @@ void AsyncEG915U::onReadData(const String &urc) {
     remaining--;
   }
   consumeOkResponse(at->getStream());
-  log_v("Chunk: %.*s", chunk.size(), (char*)chunk.data());
+  log_v("Chunk: %.*s", chunk.size(), (char *)chunk.data());
   if (transport) { transport->deliverChunk(std::move(chunk)); }
 }
 
