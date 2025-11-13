@@ -99,6 +99,8 @@ void AsyncEG915U::onOpenResult(const String &urc) {
 
 void AsyncEG915U::onClosed(const String & /*urc*/) {
   URCState.isConnected.store(ConnectionStatus::CLOSING);
+  // Prevents memory leaks
+  if (transport) { transport->reset(); }
   log_d("URC: Connection closed");
 }
 
