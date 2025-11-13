@@ -47,6 +47,7 @@ void AsyncEG915U::registerURCs() {
 
   // Data-ready notifications
   reg("+QIURC: \"recv\"", [this](const String &u) { onTcpRecv(u); });
+  reg("+QSSLURC: \"recv\"", [this](const String &u) { onSslRecv(u); });
 
   // Read data notifications
   reg("+QIRD:", [this](const String &u) { onReadData(u); });
