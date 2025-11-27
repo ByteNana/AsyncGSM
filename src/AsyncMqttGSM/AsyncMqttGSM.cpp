@@ -97,9 +97,10 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
   }
   ctx->at().popCompletedPromise(mqttPromise->getId());
 
-  mqttPromise = ctx->at().sendCommand(
-      String("AT+QMTCONN=") + cidx + ",\"" + apn + "\",\"" + (user ? user : "") + "\",\"" +
-      (pass ? pass : "") + "\"");
+  String cmd = String("AT+QMTCONN=") + cidx + ",\"" + apn + "\"";
+  if (user && strlen(user) > 0) { cmd += ",\"" + String(user) + "\""; }
+  if (pass && strlen(pass) > 0) { cmd += ",\"" + String(pass) + "\""; }
+  mqttPromise = ctx->at().sendCommand(cmd);
 
   if (!mqttPromise->wait()) {
     log_e("Failed to connect MQTT");

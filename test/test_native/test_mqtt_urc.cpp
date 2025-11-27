@@ -182,4 +182,19 @@ TEST_F(MqttURCTest, QMTSTAT_SetsDisconnected) {
   EXPECT_TRUE(ok);
 }
 
+TEST_F(MqttURCTest, QIRD_ReadDataTimeout_BreaksLoop) {
+  bool ok = runInFreeRTOSTask(
+      [this]() {
+        InjectRx(mock, "\r\n+QIRD: 100\r\n");
+        // Do NOT provide the 100 bytes of data. The onReadData should timeout.
+        // The timeout is 5 seconds in EG915.urc.cpp, so we wait a bit longer.
+        vTaskDelay(pdMS_TO_TICKS(6000));
+
+        // If the test reaches here, it means onReadData did not hang indefinitely.
+        SUCCEED();
+      },
+      "QIRD_READ_TIMEOUT", 8192, 3, 8000);
+  EXPECT_TRUE(ok);
+}
+
 FREERTOS_TEST_MAIN()

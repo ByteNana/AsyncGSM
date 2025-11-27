@@ -15,7 +15,7 @@ static bool consumeOkResponse(Stream *stream) {
     int c = stream->read();
     if (c >= 0) {
       tail += (char)c;
-      if (tail.endsWith("\r\nOK\r\n")) { return true; }
+      if (tail.endsWith("OK\r\n")) { return true; }
       // Prevent tail string from growing without bound
       if (tail.length() > 8) { tail.remove(0, tail.length() - 8); }
     }
@@ -98,7 +98,8 @@ void AsyncEG915U::onOpenResult(const String &urc) {
 }
 
 void AsyncEG915U::onClosed(const String & /*urc*/) {
-  URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
+  URCState.isConnected.store(ConnectionStatus::CLOSING);
+  // Prevents memory leaks
   if (transport) { transport->reset(); }
   log_d("URC: Connection closed");
 }
@@ -130,14 +131,27 @@ void AsyncEG915U::onReadData(const String &urc) {
   log_d("QIRD/QSSLRECV: Data length = %d", remaining);
   std::vector<uint8_t> chunk;
   chunk.reserve(remaining);
+  unsigned long startTime = millis();
+  const unsigned long timeout = 5000;
   while (remaining > 0) {
-    if (!at->getStream()->available()) continue;
+    if (millis() - startTime > timeout) {
+      log_e("Timeout reading data from modem");
+      break;
+    }
+    if (!at->getStream()->available()) {
+      vTaskDelay(1);
+      continue;
+    }
     int c = at->getStream()->read();
-    if (c < 0) continue;
+    if (c < 0) {
+      vTaskDelay(1);
+      continue;
+    }
     chunk.push_back(static_cast<uint8_t>(c));
     remaining--;
   }
   consumeOkResponse(at->getStream());
+  log_v("Chunk: %.*s", chunk.size(), (char *)chunk.data());
   if (transport) { transport->deliverChunk(std::move(chunk)); }
 }
 
