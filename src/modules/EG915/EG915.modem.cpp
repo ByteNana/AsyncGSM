@@ -49,3 +49,5 @@ bool AsyncEG915U::activatePDP() {
   at->popCompletedPromise(promise->getId());
   return true;
 }
+
+bool AsyncEG915U::setSIMSlot(EG915SimSlot slot) { return sim.setSlot(slot); }
