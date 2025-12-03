@@ -17,6 +17,33 @@ To execute the unit tests run:
 make test
 ```
 
+### Verbose Serial Logs (LOG_LEVEL=5)
+
+To see the mock Serial TX/RX interaction during native tests, build and run with `LOG_LEVEL=5`.
+
+- Using the Makefile (recommended):
+  - `make test 5`
+    - This configures CMake with `-DLOG_LEVEL=5`, builds, and runs tests.
+  - Alternatively: `make build 5 && make test 5`
+
+- Using CMake directly:
+  - `cmake -S . -B build -DLOG_LEVEL=5`
+  - `cmake --build build`
+  - `ctest --output-on-failure --test-dir build`
+
+When enabled, tests print serial traces like:
+
+```
+[SERIAL TX] AT+QIOPEN=1,0,"TCP","example.com",80,0,0
+[SERIAL RX] OK
+[SERIAL RX] +QIOPEN: 0,0
+[SERIAL TX] GET / HTTP/1.1
+[SERIAL TX] Host: example.com
+[SERIAL RX] >
+[SERIAL RX] OK
+[SERIAL RX] SEND OK
+```
+
 ## Example
 
 A minimal sketch can be found in `examples/gsm`.
