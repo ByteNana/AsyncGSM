@@ -7,13 +7,13 @@ enum ModemType { EG915U, SIM7080 };
 /* Modem is just an interface which on creation*/
 class Modem {
  private:
-  ModemBackend* backend = nullptr;
+  std::unique_ptr<ModemBackend> backend = nullptr;
 
  public:
   Modem(ModemType type) {
     switch (type) {
       case EG915U:
-        backend = new EG915ModemBackend();
+        backend = std::make_unique<EG915ModemBackend>();
         break;
       case SIM7080:
         // backend = new SIM7080ModemBackend();
@@ -21,5 +21,5 @@ class Modem {
     }
   }
 
-  ModemBackend* operator->() { return backend; }
+  ModemBackend* operator->() { return backend.get(); }
 };
