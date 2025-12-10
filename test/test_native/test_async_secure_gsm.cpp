@@ -1,5 +1,6 @@
 #include <AsyncGSM.h>
 #include <AsyncSecureGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -91,6 +92,7 @@ class AsyncSecureGsmTest : public FreeRTOSTest {
  protected:
   AsyncSecureGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -112,7 +114,7 @@ class AsyncSecureGsmTest : public FreeRTOSTest {
 TEST_F(AsyncSecureGsmTest, SecureConnectAndSendUsesSSLPath) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         std::atomic<bool> done{false};
         std::string captured;
@@ -137,7 +139,7 @@ TEST_F(AsyncSecureGsmTest, SecureConnectAndSendUsesSSLPath) {
 TEST_F(AsyncSecureGsmTest, SetCACertUploadsOnceAndCaches) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
         std::atomic<bool> done{false};
         std::string captured;
         startSslResponderCapturing(mock, &done, &captured);

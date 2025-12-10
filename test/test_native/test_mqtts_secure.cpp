@@ -1,4 +1,5 @@
 #include <AsyncSecureMqttGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -82,6 +83,11 @@ static void startMqttsResponder(
           continue;
         }
         if (!cmd.empty() && cmd[0] != 'A') {
+          if (lastPub) {
+            InjectRx(s, "+QMTPUBEX: 1,1,0\r\n");
+            lastPub = false;
+            continue;
+          }
           InjectRx(s, "OK\r\n");
           continue;
         }
@@ -122,6 +128,7 @@ class MqttsTest : public FreeRTOSTest {
   GSMContext* ctx{nullptr};
   NiceMock<MockStream>* mock{nullptr};
   AsyncSecureMqttGSM* mqtts{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -146,7 +153,7 @@ class MqttsTest : public FreeRTOSTest {
 TEST_F(MqttsTest, ConfigureSslBeforeConnect) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         std::atomic<bool> done{false};
         std::string cap;
         startMqttsResponder(mock, &done, &cap);
@@ -172,7 +179,7 @@ TEST_F(MqttsTest, ConfigureSslBeforeConnect) {
 TEST_F(MqttsTest, ConnectPublishOverTls) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         std::atomic<bool> done{false};
         startMqttsResponder(mock, &done);
 

@@ -1,4 +1,5 @@
 #include <AsyncGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -11,6 +12,7 @@ class URCRegistrationTest : public FreeRTOSTest {
  protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -32,7 +34,7 @@ class URCRegistrationTest : public FreeRTOSTest {
 TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        bool began = gsm->context().begin(*mock);
+        bool began = gsm->context().begin(*mock, module);
         EXPECT_TRUE(began);
         if (!began) return;
 
@@ -40,7 +42,8 @@ TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
         // CONNECTED
         InjectRx(mock, "\r\n+QIOPEN: 0,0\r\n");
         vTaskDelay(pdMS_TO_TICKS(20));
-        EXPECT_EQ(gsm->context().modem().URCState.isConnected.load(), ConnectionStatus::CONNECTED);
+        EXPECT_EQ(
+            gsm->context().modem().socket().getConnectionStatus(), ConnectionStatus::CONNECTED);
         gsm->context().end();
         vTaskDelay(pdMS_TO_TICKS(80));
       },
@@ -51,7 +54,7 @@ TEST_F(URCRegistrationTest, QIOPEN_URC_SetsConnected) {
 TEST_F(URCRegistrationTest, QIURCRecvDeferredUntilAvailable) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        bool began = gsm->context().begin(*mock);
+        bool began = gsm->context().begin(*mock, module);
         EXPECT_TRUE(began);
         if (!began) return;
 

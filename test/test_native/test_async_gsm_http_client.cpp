@@ -1,5 +1,6 @@
 #include <AsyncGSM.h>
 #include <HttpClient.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -28,6 +29,7 @@ class HttpClientUsageTest : public FreeRTOSTest {
  protected:
   TestAsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -51,7 +53,7 @@ class HttpClientUsageTest : public FreeRTOSTest {
 TEST_F(HttpClientUsageTest, GetRequestReturnsBody) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         std::atomic<bool> done{false};
         std::string captured;
@@ -83,7 +85,7 @@ TEST_F(HttpClientUsageTest, GetRequestReturnsBody) {
 TEST_F(HttpClientUsageTest, ConnectFailurePropagatesToHttpClient) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         std::atomic<bool> done{false};
         startTcpResponder(mock, &done, true);  // force QIOPEN failure
@@ -102,7 +104,7 @@ TEST_F(HttpClientUsageTest, ConnectFailurePropagatesToHttpClient) {
 TEST_F(HttpClientUsageTest, SendsRequestAndReadsResponse) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         std::atomic<bool> done{false};
         std::string captured;
@@ -147,7 +149,7 @@ TEST_F(HttpClientUsageTest, SendsRequestAndReadsResponse) {
 TEST_F(HttpClientUsageTest, PostSendsBodyAndReadsResponse) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         std::atomic<bool> done{false};
         std::string captured;

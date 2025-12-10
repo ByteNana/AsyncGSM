@@ -6,12 +6,7 @@
 
 void AsyncSecureMqttGSM::setSecurityLevel(bool secure) {
   auto &at = context().at();
-
-  String secureLevel = (isSecure() ? "1" : "0");
-  // Enable SSL for the MQTT client and bind to SSL context index
-  if (!at.sendSync(String("AT+QMTCFG=\"ssl\",") + cidx + "," + secureLevel + "," + ssl_cidx)) {
-    log_e("Failed to set SSL for MQTT");
-  }
+  context().modem().mqtt().setSecurityLevel(isSecure(), ssl_cidx);
 }
 
 bool AsyncSecureMqttGSM::connect(const char *id, const char *user, const char *pass) {
@@ -31,6 +26,7 @@ bool AsyncSecureMqttGSM::subscribe(const char *topic) {
 
 void AsyncSecureMqttGSM::setCACert(const char *rootCA) {
   if (!rootCA || !*rootCA) { return; }
+  if (!context().hasModule()) return;
 
   MD5Builder md5;
   md5.begin();
@@ -42,12 +38,12 @@ void AsyncSecureMqttGSM::setCACert(const char *rootCA) {
   const char *filename = newMd5.c_str();
   String found;
   size_t fsize = 0;
-  bool exists = context().modem().findUFSFile(filename, &found, &fsize);
+  bool exists = context().modem().socket().findUFSFile(filename, &found, &fsize);
   if (!exists) {
-    context().modem().uploadUFSFile(
-        filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA));
+    context().modem().socket().uploadUFSFile(
+        filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA), 120000);
   }
 
-  context().modem().setCACertificate(filename, ssl_cidx);
+  context().modem().socket().setCACertificate(filename, ssl_cidx);
   caMd5Cache = newMd5;
 }

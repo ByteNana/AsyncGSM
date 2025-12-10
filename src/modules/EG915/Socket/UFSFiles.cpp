@@ -1,68 +1,11 @@
-#include "EG915.h"
+#include "Socket.h"
 
-#include <MD5Builder.h>
-#include <utils/GSMTransport/GSMTransport.h>
-
-#include "esp_log.h"
-
-bool AsyncEG915U::connectSecure(const char *host, uint16_t port) {
-  // Enable TLS 1.2
-  if (!at->sendSync("AT+QSSLCFG=\"sslversion\",1,3")) {
-    log_e("Failed to set SSL version");
-    return false;
-  }
-
-  // Allow a strong default cipher suite (RSA with AES-256-CBC-SHA)
-  if (!at->sendSync("AT+QSSLCFG=\"ciphersuite\",1,0X0035")) {
-    log_e("Failed to set SSL cipher suite");
-    return false;
-  }
-
-  // Enable SNI so the server can select proper certificate when using hostnames
-  at->sendSync("AT+QSSLCFG=\"sni\",1,1");
-
-  // Set security level: 1 when CA is configured, else 0 (insecure)
-  if (!at->sendSync(String("AT+QSSLCFG=\"seclevel\",1,") + (certConfigured ? "1" : "0"))) {
-    log_e("Failed to set SSL security level");
-    return false;
-  }
-
-  // Open SSL connection (PDP ctx=1, SSL ctx=1, clientid=0)
-  URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-  at->sendSync(String("AT+QSSLOPEN=1,1,0,\"") + host + "\"," + String(port) + ",0");
-
-  for (int i = 0; i < 20; i++) {
-    ConnectionStatus status = URCState.isConnected.load();
-    if (status == ConnectionStatus::CONNECTED || status == ConnectionStatus::FAILED) { break; }
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
-
-  if (URCState.isConnected.load() == ConnectionStatus::CONNECTED) {
-    log_d("Connection URC received successfully");
-  } else {
-    log_e("No +QIOPEN URC received or it indicated failure");
-  }
-  return URCState.isConnected.load() == ConnectionStatus::CONNECTED;
-}
-
-bool AsyncEG915U::stopSecure() {
-  // Request close
-  bool ok = at->sendSync("AT+QSSLCLOSE=0");
-  // Wait briefly for URC to arrive and update state; under heavy logs this can be delayed
-  if (ok) {
-    TickType_t t0 = xTaskGetTickCount();
-    while (URCState.isConnected.load() != ConnectionStatus::DISCONNECTED &&
-           (xTaskGetTickCount() - t0) < pdMS_TO_TICKS(2000)) {
-      vTaskDelay(pdMS_TO_TICKS(5));
-    }
-    URCState.isConnected.store(ConnectionStatus::DISCONNECTED);
-    if (transport) { transport->reset(); }
-  }
-  return ok;
-}
-
-bool AsyncEG915U::uploadUFSFile(
+bool EG915Socket::uploadUFSFile(
     const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs) {
+  if (!at) {
+    log_e("AT handler not initialized");
+    return false;
+  }
   if (!path || !*path || !data || size == 0) {
     log_e("Invalid params for uploadUFSFile");
     return false;
@@ -101,7 +44,12 @@ bool AsyncEG915U::uploadUFSFile(
   return true;
 }
 
-bool AsyncEG915U::setCACertificate(const char *ufsPath, const char *ssl_cidx) {
+bool EG915Socket::setCACertificate(const char *ufsPath, const char *ssl_cidx) {
+  if (!at) {
+    log_e("AT handler not initialized");
+    return false;
+  }
+
   if (!ufsPath || !*ufsPath) {
     log_e("Invalid CA cert path");
     return false;
@@ -120,7 +68,12 @@ bool AsyncEG915U::setCACertificate(const char *ufsPath, const char *ssl_cidx) {
   return true;
 }
 
-bool AsyncEG915U::findUFSFile(const char *pattern, String *outName, size_t *outSize) {
+bool EG915Socket::findUFSFile(const char *pattern, String *outName, size_t *outSize) {
+  if (!at) {
+    log_e("AT handler not initialized");
+    return false;
+  }
+
   if (!pattern || !*pattern) return false;
   String resp;
   String cmd = String("AT+QFLST=\"") + pattern + "\"";

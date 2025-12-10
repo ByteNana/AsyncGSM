@@ -1,4 +1,5 @@
 #include <AsyncGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -11,6 +12,7 @@ class SendSyncTest : public FreeRTOSTest {
  protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -32,7 +34,7 @@ class SendSyncTest : public FreeRTOSTest {
 TEST_F(SendSyncTest, OkResponse) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         String resp;
         // Schedule an OK after the command is sent
@@ -47,7 +49,7 @@ TEST_F(SendSyncTest, OkResponse) {
 TEST_F(SendSyncTest, ErrorResponse) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         // Inject ERROR directly for our command
         InjectRx(mock, "ERROR\r\n");
@@ -62,7 +64,7 @@ TEST_F(SendSyncTest, ErrorResponse) {
 TEST_F(SendSyncTest, Timeout) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         String resp;
         bool s = gsm->context().at().sendSync("AT+NOANSWER", resp, 50);

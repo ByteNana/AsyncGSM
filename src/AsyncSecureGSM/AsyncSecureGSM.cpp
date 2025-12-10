@@ -16,14 +16,9 @@ AsyncSecureGSM::AsyncSecureGSM() : AsyncGSM() {
   ctx->transport().setDefaultSSL(true);
 }
 
-bool AsyncSecureGSM::modemConnect(const char *host, uint16_t port) {
-  return ctx->modem().connectSecure(host, port);
-}
-
-bool AsyncSecureGSM::modemStop() { return ctx->modem().stopSecure(); }
-
 void AsyncSecureGSM::setCACert(const char *rootCA) {
   if (!rootCA || !*rootCA) { return; }
+  if (!ctx->hasModule()) return;
 
   MD5Builder md5;
   md5.begin();
@@ -37,12 +32,13 @@ void AsyncSecureGSM::setCACert(const char *rootCA) {
   const char *filename = newMd5.c_str();
   String foundName;
   size_t foundSize = 0;
-  bool exists = ctx->modem().findUFSFile(filename, &foundName, &foundSize);
+  bool exists = ctx->modem().socket().findUFSFile(filename, &foundName, &foundSize);
   if (!exists) {
     log_d("Uploading CA cert to UFS as %s", filename);
-    ctx->modem().uploadUFSFile(filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA));
+    ctx->modem().socket().uploadUFSFile(
+        filename, reinterpret_cast<const uint8_t *>(rootCA), strlen(rootCA), 120000);
   }
   log_i("Configuring CA cert for SSL");
-  ctx->modem().setCACertificate(filename, ssl_cidx);
+  ctx->modem().socket().setCACertificate(filename, ssl_cidx);
   caMd5 = newMd5;
 }

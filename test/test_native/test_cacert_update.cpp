@@ -1,4 +1,5 @@
 #include <AsyncGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 
@@ -60,6 +61,7 @@ class FindFileTest : public FreeRTOSTest {
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mock{nullptr};
   std::atomic<bool> done{false};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -84,11 +86,11 @@ TEST_F(FindFileTest, ReturnsFalseWhenNoMatch) {
   bool ok = runInFreeRTOSTask(
       [this]() {
         startListResponder(mock, &done, "abcdef", 123);
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         String name;
         size_t size = 0;
-        bool found = gsm->context().modem().findUFSFile("notfound", &name, &size);
+        bool found = gsm->context().modem().socket().findUFSFile("notfound", &name, &size);
         EXPECT_FALSE(found);
       },
       "FindNoMatch", 8192, 3, 2000);
@@ -99,12 +101,12 @@ TEST_F(FindFileTest, ParsesNameAndSizeOnMatch) {
   bool ok = runInFreeRTOSTask(
       [this]() {
         startListResponder(mock, &done, "deadbeefdeadbeefdeadbeefdeadbeef", 2048);
-        ASSERT_TRUE(gsm->context().begin(*mock));
+        ASSERT_TRUE(gsm->context().begin(*mock, module));
 
         String name;
         size_t size = 0;
-        bool found =
-            gsm->context().modem().findUFSFile("deadbeefdeadbeefdeadbeefdeadbeef", &name, &size);
+        bool found = gsm->context().modem().socket().findUFSFile(
+            "deadbeefdeadbeefdeadbeefdeadbeef", &name, &size);
         EXPECT_TRUE(found);
         EXPECT_EQ(name, String("deadbeefdeadbeefdeadbeefdeadbeef"));
         EXPECT_EQ(size, (size_t)2048);

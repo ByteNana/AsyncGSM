@@ -3,14 +3,16 @@
 #include <Arduino.h>
 #include <AsyncATHandler.h>
 #include <Stream.h>
-#include <utils/MqttQueue/MqttQueue.h>
+#include <modules/iGSMModule/iGSMModule.h>
 
 #include "EG915.settings.h"
+#include "MQTT/MQTT.h"
+#include "ModemInfo/ModemInfo.h"
+#include "Network/Network.h"
 #include "SIMCard/SIMCard.h"
+#include "Socket/Socket.h"
 
-class GSMTransport;
-
-class AsyncEG915U {
+class AsyncEG915U : public iGSMModule {
  private:
   Stream *_stream = nullptr;
   GSMTransport *transport = nullptr;
@@ -33,44 +35,33 @@ class AsyncEG915U {
   void onMqttStat(const String &urc);
 
  public:
-  UrcState URCState;
-  AtomicMqttQueue *mqttQueueSub = nullptr;
-  EG915SIMCard sim;
+  EG915SIMCard simModule;
+  EG915Network networkModule;
+  EG915ModemInfo modemInfoModule;
+  EG915Socket socketModule;
+  EG915MQTT mqttModule;
 
   AsyncEG915U();
   ~AsyncEG915U();
-  bool init(Stream &stream, AsyncATHandler &atHandler, GSMTransport &transport);
-  bool setEchoOff();
-  bool enableVerboseErrors();
-  bool checkModemModel();
-  bool checkTimezone();
-  bool checkSIMReady();
-  bool disalbeSleepMode();
-  bool gprsConnect(const char *apn, const char *user = nullptr, const char *pass = nullptr);
-  bool gprsDisconnect();
-  String getSimCCID();
-  String getIMEI();
-  String getIMSI();
-  String getOperator();
-  String getIPAddress();
-  bool connect(const char *host, uint16_t port);
-  bool stop();
-  bool connectSecure(const char *host, uint16_t port);
-  bool connectSecure(const char *host, uint16_t port, const char *caCertPath);
-  bool stopSecure();
-  bool setSIMSlot(EG915SimSlot slot);
 
-  bool uploadUFSFile(
-      const char *path, const uint8_t *data, size_t size, uint32_t timeoutMs = 120000);
-  bool setCACertificate(const char *ufsPath, const char *ssl_cidx);
-  bool findUFSFile(const char *pattern, String *outName = nullptr, size_t *outSize = nullptr);
+  // Interface implementations
+  iSIMCard &sim() override { return simModule; }
+  iGSMNetwork &network() override { return networkModule; }
+  iModemInfo &modemInfo() override { return modemInfoModule; }
+  iSocketConnection &socket() override { return socketModule; }
+  iMQTT &mqtt() override { return mqttModule; }
+
+  bool init(Stream &stream, AsyncATHandler &atHandler, GSMTransport &transport) override;
+
+  bool setEchoOff() override;
+  bool enableVerboseErrors() override;
+  bool checkModemModel() override;
+  bool checkTimezone() override;
+  bool checkSIMReady() override;
+  bool disalbeSleepMode() override;
+
+  ConnectionStatus getConnectionStatus() override;
 
   // Helpers for GPRS connection
-  void disableConnections();
-  bool setPDPContext(const char *apn);
-  bool activatePDPContext();
-  bool isGPRSSAttached();
-  bool checkNetworkContext();
-  bool activatePDP();
-  bool attachGPRS();
+  void disableConnections() override;
 };
