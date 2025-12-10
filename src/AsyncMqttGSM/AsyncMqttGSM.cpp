@@ -4,18 +4,20 @@
 
 AsyncMqttGSM::AsyncMqttGSM(GSMContext &context) {
   ctx = &context;
-  ctx->modem().mqttQueueSub = &mqttQueueSub;
+  if (ctx->hasModule()) { ctx->modem().mqtt().setQueue(&mqttQueueSub); }
 }
 
 AsyncMqttGSM::AsyncMqttGSM() {
   owns = true;
   ctx = new GSMContext();
-  ctx->modem().mqttQueueSub = &mqttQueueSub;
+  // ctx has no module yet
 }
 
 AsyncMqttGSM::~AsyncMqttGSM() {
   // Detach our queue from the shared modem to avoid dangling pointer
-  if (ctx && ctx->modem().mqttQueueSub == &mqttQueueSub) { ctx->modem().mqttQueueSub = nullptr; }
+  if (ctx && ctx->hasModule() && ctx->modem().mqtt().getQueue() == &mqttQueueSub) {
+    ctx->modem().mqtt().setQueue(nullptr);
+  }
   if (owns && ctx) {
     delete ctx;
     ctx = nullptr;
@@ -24,41 +26,14 @@ AsyncMqttGSM::~AsyncMqttGSM() {
 
 bool AsyncMqttGSM::init() {
   log_d("Initializing AsyncMqttGSM...");
-
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"recv/mode\",") + cidx + ",1")) {
-    log_e("Failed to set Receive mode");
+  if (!ctx->hasModule()) {
+    log_e("Modem not initialized");
     return false;
   }
+  // Ensure queue is attached (in case constructor ran before module was attached)
+  ctx->modem().mqtt().setQueue(&mqttQueueSub);
 
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"version\",") + cidx + ",4")) {
-    log_e("Failed to set MQTT version");
-    return false;
-  }
-
-  // Set PDP context ID to 1
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"pdpcid\",") + cidx)) {
-    log_e("Failed to set PDP context ID");
-    return false;
-  }
-
-  // Set keepalive to 60 seconds
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"keepalive\",") + cidx + ",120")) {
-    log_e("Failed to set keepalive");
-    return false;
-  }
-
-  // Set clean session to 1 (true)
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"session\",") + cidx + ",0")) {
-    log_e("Failed to set session");
-    return false;
-  }
-
-  // Set command timeout to 5 seconds, 3 retries, no exponential backoff
-  if (!ctx->at().sendSync(String("AT+QMTCFG=\"timeout\",") + cidx + ",5,3,0")) {
-    log_e("Failed to set timeout");
-    return false;
-  }
-  return true;
+  return ctx->modem().mqtt().begin();
 }
 
 AsyncMqttGSM &AsyncMqttGSM::setServer(const char *domain, uint16_t port) {
@@ -68,7 +43,8 @@ AsyncMqttGSM &AsyncMqttGSM::setServer(const char *domain, uint16_t port) {
 }
 
 uint8_t AsyncMqttGSM::connected() {
-  return ctx->modem().URCState.mqttState.load() == MqttConnectionState::CONNECTED;
+  if (!ctx->hasModule()) return 0;
+  return ctx->modem().mqtt().getState() == MqttConnectionState::CONNECTED;
 }
 
 bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) {
@@ -76,128 +52,30 @@ bool AsyncMqttGSM::connect(const char *apn, const char *user, const char *pass) 
   this->user = user;
   this->pass = pass;
 
-  // restarts connection process
-  ctx->modem().URCState.mqttState.store(MqttConnectionState::IDLE);
+  if (!ctx->hasModule()) return false;
+  // Ensure queue is attached
+  ctx->modem().mqtt().setQueue(&mqttQueueSub);
 
-  ATPromise *mqttPromise = ctx->at().sendCommand(
-      String("AT+QMTOPEN=") + cidx + ",\"" + String(domain) + "\"," + String(port));
-  if (!mqttPromise->wait()) {
-    log_e("Failed to open MQTT connection");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  // Wait on +QMTOPEN URC
-  mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect(String("+QMTOPEN: ") + cidx + ",0")->wait()) {
-    log_e("Failed to get MQTT open URC");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  String cmd = String("AT+QMTCONN=") + cidx + ",\"" + apn + "\"";
-  if (user && strlen(user) > 0) { cmd += ",\"" + String(user) + "\""; }
-  if (pass && strlen(pass) > 0) { cmd += ",\"" + String(pass) + "\""; }
-  mqttPromise = ctx->at().sendCommand(cmd);
-
-  if (!mqttPromise->wait()) {
-    log_e("Failed to connect MQTT");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect(String("+QMTCONN: ") + cidx + ",0,0")->wait()) {
-    log_e("Failed to get MQTT Connection URC");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  ctx->modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
-  return true;
+  return ctx->modem().mqtt().connect(domain, port, apn, user, pass);
 }
 
 bool AsyncMqttGSM::publish(const char *topic, const uint8_t *payload, unsigned int plength) {
-  // Client: 0, msgId: 1, qos: 1, retain: 0
-  String cmd = String("AT+QMTPUBEX=") + cidx + ",1,1,0,\"" + topic + "\"," + String(plength);
-  ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
-  if (!mqttPromise->expect(">")->wait()) {
-    log_e("Failed to publish MQTT topic");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  // Send payload
-  String payloadStr;
-  payloadStr.reserve(plength);
-  for (unsigned int i = 0; i < plength; i++) { payloadStr += char(payload[i]); }
-  mqttPromise = ctx->at().sendCommand(payloadStr);
-  if (!mqttPromise->wait()) {
-    log_e("Failed to publish MQTT payload");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect(String("+QMTPUBEX: ") + cidx)->wait() ||
-      !mqttPromise->getResponse()->containsResponse(String("+QMTPUBEX: ") + cidx + ",1,0")) {
-    log_e("Failed to get MQTT publish confirmation");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  return true;
+  if (!ctx->hasModule()) return false;
+  return ctx->modem().mqtt().publish(topic, payload, plength, 0, false);
 }
 
 bool AsyncMqttGSM::subscribe(const char *topic) { return subscribe(topic, 0); }
 
 bool AsyncMqttGSM::subscribe(const char *topic, uint8_t qos) {
   subscribedTopics.insert(topic);
-  // Client: 0, msgId: 1, topic, qos
-  String cmd = String("AT+QMTSUB=") + cidx + ",1,\"" + topic + "\"," + String(qos);
-  ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
-  if (!mqttPromise->wait()) {
-    log_e("Failed to subscribe MQTT topic");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect(String("+QMTSUB: ") + cidx + ",1,0")->wait()) {
-    log_e("Failed to get MQTT subscribe confirmctx->ation");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-  return true;
+  if (!ctx->hasModule()) return false;
+  return ctx->modem().mqtt().subscribe(topic, qos);
 }
 
 bool AsyncMqttGSM::unsubscribe(const char *topic) {
-  String cmd = String("AT+QMTUNSUB=") + cidx + ",1,\"" + topic + "\"";
-  ATPromise *mqttPromise = ctx->at().sendCommand(cmd);
-  if (!mqttPromise->wait()) {
-    log_e("Failed to unsubscribe MQTT topic");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-
-  mqttPromise = ctx->at().sendCommand("");
-  if (!mqttPromise->expect(String("+QMTUNSUB: ") + cidx + ",1,0")->wait()) {
-    log_e("Failed to get MQTT unsubscribe confirmctx->ation");
-    ctx->at().popCompletedPromise(mqttPromise->getId());
-    return false;
-  }
-  ctx->at().popCompletedPromise(mqttPromise->getId());
-  return true;
+  subscribedTopics.erase(topic);
+  if (!ctx->hasModule()) return false;
+  return ctx->modem().mqtt().unsubscribe(topic);
 }
 
 AsyncMqttGSM &AsyncMqttGSM::setCallback(AsyncMqttGSMCallback callback) {
@@ -206,22 +84,24 @@ AsyncMqttGSM &AsyncMqttGSM::setCallback(AsyncMqttGSMCallback callback) {
 }
 
 void AsyncMqttGSM::loop() {
-  if (ctx->modem().URCState.mqttState.load() == MqttConnectionState::IDLE) { return; }
+  if (!ctx->hasModule()) return;
+  if (ctx->modem().mqtt().getState() == MqttConnectionState::IDLE) { return; }
 
   if (!mqttCallback) { return; }
 
-  if (ctx->modem().URCState.mqttState.load() == MqttConnectionState::DISCONNECTED) {
+  if (ctx->modem().mqtt().getState() == MqttConnectionState::DISCONNECTED) {
     if (!reconnect()) {
       log_e("Failed to reconnect to MQTT server");
       return;
     }
   }
 
-  if (!ctx->modem().mqttQueueSub) { return; }
-  if (ctx->modem().mqttQueueSub->size() == 0) { return; }
+  AtomicMqttQueue *queue = ctx->modem().mqtt().getQueue();
+  if (!queue) { return; }
+  if (queue->size() == 0) { return; }
 
   MqttMessage message;
-  while (ctx->modem().mqttQueueSub->pop(message)) {
+  while (queue->pop(message)) {
     mqttCallback((char *)message.topic.c_str(), message.payload.data(), message.length);
   }
 }
@@ -242,6 +122,6 @@ bool AsyncMqttGSM::reconnect() {
   }
 
   log_i("Reconnected to MQTT server and resubscribed to topics.");
-  ctx->modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
+  // State is handled by connect()
   return true;
 }

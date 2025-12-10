@@ -1,5 +1,4 @@
 #pragma once
-
 #include <stdint.h>
 
 template <typename E>
@@ -8,11 +7,9 @@ constexpr auto u8(E e) {
 }
 
 // =========================================================
-// SIM Detection Configuration ( +QSIMDET )
+// SIM Detection Configuration
 // =========================================================
-
-struct EG915SimDetConfig {
-  // Enable or disable (U)SIM card detection
+struct SIMDetectionConfig {
   enum class CardDetection : uint8_t {
     DISABLE = 0,
     ENABLE = 1,
@@ -22,17 +19,15 @@ struct EG915SimDetConfig {
     LOW_LEVEL = 0,
     HIGH_LEVEL = 1,
   };
+
   CardDetection cardDetection{CardDetection::DISABLE};
   InsertLevel insertLevel{InsertLevel::LOW_LEVEL};
 };
 
 // =========================================================
-// SIM Status Reporting ( +QSIMSTAT )
+// SIM Status Reporting
 // =========================================================
-
-struct EG915SimStatus {
-  // If it is enabled, when (U)SIM card is removed or inserted,
-  // the URC +QSIMSTAT: <enable>,<insertedstatus> will be reported
+struct SIMStatusReport {
   enum class ReportState : uint8_t {
     DISABLE = 0,
     ENABLE = 1,
@@ -49,10 +44,9 @@ struct EG915SimStatus {
 };
 
 // =========================================================
-// SIM Slot Selection ( +QDSIM )
+// SIM Slot Selection
 // =========================================================
-
-enum class EG915SimSlot : uint8_t {
+enum class SIMSlot : uint8_t {
   UNKNOWN = 255,
   SLOT_1 = 0,
   SLOT_2 = 1,

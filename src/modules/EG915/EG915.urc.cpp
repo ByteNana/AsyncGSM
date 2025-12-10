@@ -1,7 +1,6 @@
 #include "EG915.h"
 
 #include <utils/GSMTransport/GSMTransport.h>
-#include <utils/MqttQueue/MqttQueue.h>
 
 #include <iomanip>
 #include <utility>
@@ -72,8 +71,7 @@ void AsyncEG915U::onRegChanged(const String &urc) {
     String statusStr = trimmed.substring(commaIndex + 1);
     int endPos = statusStr.indexOf(',');
     if (endPos != -1) statusStr = statusStr.substring(0, endPos);
-    URCState.creg.store((RegStatus)statusStr.toInt());
-    log_v("URC: Registration status updated to %d", URCState.creg.load());
+    networkModule.setRegistrationStatus((RegStatus)statusStr.toInt());
   }
 }
 
@@ -88,17 +86,17 @@ void AsyncEG915U::onOpenResult(const String &urc) {
     if (endPos != -1) resultStr = resultStr.substring(0, endPos);
     int result = resultStr.toInt();
     if (result == 0) {
-      URCState.isConnected.store(ConnectionStatus::CONNECTED);
+      socketModule.setIsConnected(ConnectionStatus::CONNECTED);
       log_d("URC: Connection opened successfully");
     } else {
-      URCState.isConnected.store(ConnectionStatus::FAILED);
+      socketModule.setIsConnected(ConnectionStatus::FAILED);
       log_e("URC: Connection failed with error %d", result);
     }
   }
 }
 
 void AsyncEG915U::onClosed(const String & /*urc*/) {
-  URCState.isConnected.store(ConnectionStatus::CLOSING);
+  socketModule.setIsConnected(ConnectionStatus::CLOSING);
   // Prevents memory leaks
   if (transport) { transport->reset(); }
   log_d("URC: Connection closed");
@@ -124,7 +122,7 @@ void AsyncEG915U::onReadData(const String &urc) {
   String header = urc.substring(headerStart + 1);
   int remaining = header.toInt();
   if (remaining < 0) {
-    log_e(">>>>>>>>>>>QIRD: Invalid length");
+    log_e(">>>>>>>>>QIRD: Invalid length");
     if (transport) { transport->deliverChunk(std::vector<uint8_t>()); }
     return;
   }
@@ -181,7 +179,8 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
     return;
   }
 
-  if (!mqttQueueSub) {
+  AtomicMqttQueue *queue = mqttModule.getQueue();
+  if (!queue) {
     log_w("URC: MQTT message received but mqttQueueSub is not set");
     return;
   }
@@ -225,7 +224,7 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
   }
   msg.length = msg.payload.size();
 
-  if (mqttQueueSub->push(msg, pdMS_TO_TICKS(10))) {
+  if (queue->push(msg, pdMS_TO_TICKS(10))) {
     log_d("URC: MQTT message queued, payload length %d", msg.length);
   } else {
     log_e("URC: MQTT queue full - dropping message");
@@ -236,5 +235,5 @@ void AsyncEG915U::onMqttRecv(const String &urc) {
 
 void AsyncEG915U::onMqttStat(const String & /*urc*/) {
   log_w("URC: +QMTSTAT received");
-  URCState.mqttState.store(MqttConnectionState::DISCONNECTED);
+  mqttModule.setState(MqttConnectionState::DISCONNECTED);
 }

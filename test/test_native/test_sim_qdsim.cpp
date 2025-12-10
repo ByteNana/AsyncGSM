@@ -1,4 +1,5 @@
 #include <AsyncGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -12,6 +13,7 @@ class SimQDSIMTest : public FreeRTOSTest {
  protected:
   GSMContext *ctx{nullptr};
   NiceMock<MockStream> *mock{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -33,13 +35,13 @@ class SimQDSIMTest : public FreeRTOSTest {
 TEST_F(SimQDSIMTest, GetCurrentSlotParsesResponse) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         // Provide +QDSIM: 1
         scheduleInject(mock, 10, "\r\n+QDSIM: 1\r\nOK\r\n");
 
-        EG915SimSlot slot = ctx->modem().sim.getCurrentSlot();
-        EXPECT_EQ(slot, EG915SimSlot::SLOT_2);
+        SIMSlot slot = ctx->modem().sim().getCurrentSlot();
+        EXPECT_EQ(slot, SIMSlot::SLOT_2);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QDSIM?\r\n"), std::string::npos);
@@ -51,12 +53,12 @@ TEST_F(SimQDSIMTest, GetCurrentSlotParsesResponse) {
 TEST_F(SimQDSIMTest, SetSlotSendsCommand) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         // Generic OK responder in mocks will acknowledge the command
         scheduleInject(mock, 10, "\r\nOK\r\n");
 
-        bool res = ctx->modem().sim.setSlot(EG915SimSlot::SLOT_2);
+        bool res = ctx->modem().sim().setSlot(SIMSlot::SLOT_2);
         EXPECT_TRUE(res);
 
         std::string tx = mock->GetTxData();
@@ -69,12 +71,12 @@ TEST_F(SimQDSIMTest, SetSlotSendsCommand) {
 TEST_F(SimQDSIMTest, GetCurrentSlotSlot1) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         scheduleInject(mock, 10, "\r\n+QDSIM: 0\r\nOK\r\n");
 
-        EG915SimSlot slot = ctx->modem().sim.getCurrentSlot();
-        EXPECT_EQ(slot, EG915SimSlot::SLOT_1);
+        SIMSlot slot = ctx->modem().sim().getCurrentSlot();
+        EXPECT_EQ(slot, SIMSlot::SLOT_1);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QDSIM?\r\n"), std::string::npos);
@@ -86,12 +88,12 @@ TEST_F(SimQDSIMTest, GetCurrentSlotSlot1) {
 TEST_F(SimQDSIMTest, GetCurrentSlotInvalidResponseKeepsUnknown) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         // Invalid value 3 should fail parse and keep UNKNOWN
         scheduleInject(mock, 10, "\r\n+QDSIM: 3\r\nOK\r\n");
-        EG915SimSlot slot = ctx->modem().sim.getCurrentSlot();
-        EXPECT_EQ(slot, EG915SimSlot::UNKNOWN);
+        SIMSlot slot = ctx->modem().sim().getCurrentSlot();
+        EXPECT_EQ(slot, SIMSlot::UNKNOWN);
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QDSIM?\r\n"), std::string::npos);
       },
@@ -102,18 +104,18 @@ TEST_F(SimQDSIMTest, GetCurrentSlotInvalidResponseKeepsUnknown) {
 TEST_F(SimQDSIMTest, GetCurrentSlotInvalidResponsePreservesCached) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
 
         // First, set slot to SLOT_1 (updates cache)
         scheduleInject(mock, 10, "\r\nOK\r\n");
-        EXPECT_TRUE(ctx->modem().sim.setSlot(EG915SimSlot::SLOT_1));
+        EXPECT_TRUE(ctx->modem().sim().setSlot(SIMSlot::SLOT_1));
         (void)mock->GetTxData();
 
         // Now return invalid response to getCurrentSlot
         scheduleInject(mock, 20, "\r\n+QDSIM: 9\r\nOK\r\n");
-        EG915SimSlot slot = ctx->modem().sim.getCurrentSlot();
-        EXPECT_EQ(slot, EG915SimSlot::SLOT_1);
+        SIMSlot slot = ctx->modem().sim().getCurrentSlot();
+        EXPECT_EQ(slot, SIMSlot::SLOT_1);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QDSIM?\r\n"), std::string::npos);
@@ -125,9 +127,9 @@ TEST_F(SimQDSIMTest, GetCurrentSlotInvalidResponsePreservesCached) {
 TEST_F(SimQDSIMTest, SetSlotRejectsUnknown) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
-        bool res = ctx->modem().sim.setSlot(EG915SimSlot::UNKNOWN);
+        bool res = ctx->modem().sim().setSlot(SIMSlot::UNKNOWN);
         EXPECT_FALSE(res);
         std::string tx = mock->GetTxData();
         EXPECT_EQ(tx.find("AT+QDSIM="), std::string::npos);
@@ -139,16 +141,16 @@ TEST_F(SimQDSIMTest, SetSlotRejectsUnknown) {
 TEST_F(SimQDSIMTest, SetSlotNoOpWhenSame) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
 
         // Set to SLOT_2 first
         scheduleInject(mock, 10, "\r\nOK\r\n");
-        EXPECT_TRUE(ctx->modem().sim.setSlot(EG915SimSlot::SLOT_2));
+        EXPECT_TRUE(ctx->modem().sim().setSlot(SIMSlot::SLOT_2));
         (void)mock->GetTxData();
 
         // Call again with same slot; should not send AT+QDSIM
-        bool res = ctx->modem().sim.setSlot(EG915SimSlot::SLOT_2);
+        bool res = ctx->modem().sim().setSlot(SIMSlot::SLOT_2);
         EXPECT_TRUE(res);
         std::string tx = mock->GetTxData();
         EXPECT_EQ(tx.find("AT+QDSIM="), std::string::npos);
@@ -162,14 +164,14 @@ TEST_F(SimQDSIMTest, SetSlotNoOpWhenSame) {
 TEST_F(SimQDSIMTest, QSIMDETParsesSingleSlot) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         // +QSIMDET: 1,1
         scheduleInject(mock, 10, "\r\n+QSIMDET: 1,1\r\nOK\r\n");
 
-        EG915SimDetConfig det = ctx->modem().sim.getDetection();
-        EXPECT_EQ(det.cardDetection, EG915SimDetConfig::CardDetection::ENABLE);
-        EXPECT_EQ(det.insertLevel, EG915SimDetConfig::InsertLevel::HIGH_LEVEL);
+        SIMDetectionConfig det = ctx->modem().sim().getDetection();
+        EXPECT_EQ(det.cardDetection, SIMDetectionConfig::CardDetection::ENABLE);
+        EXPECT_EQ(det.insertLevel, SIMDetectionConfig::InsertLevel::HIGH_LEVEL);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QSIMDET?\r\n"), std::string::npos);
@@ -181,13 +183,13 @@ TEST_F(SimQDSIMTest, QSIMDETParsesSingleSlot) {
 TEST_F(SimQDSIMTest, QSIMSTATParsesInserted) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         scheduleInject(mock, 10, "\r\n+QSIMSTAT: 1,1\r\nOK\r\n");
 
-        EG915SimStatus st = ctx->modem().sim.getStatus();
-        EXPECT_EQ(st.enable, EG915SimStatus::ReportState::ENABLE);
-        EXPECT_EQ(st.inserted, EG915SimStatus::InsertStatus::INSERTED);
+        SIMStatusReport st = ctx->modem().sim().getStatus();
+        EXPECT_EQ(st.enable, SIMStatusReport::ReportState::ENABLE);
+        EXPECT_EQ(st.inserted, SIMStatusReport::InsertStatus::INSERTED);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QSIMSTAT?\r\n"), std::string::npos);
@@ -199,13 +201,13 @@ TEST_F(SimQDSIMTest, QSIMSTATParsesInserted) {
 TEST_F(SimQDSIMTest, QSIMSTATParsesUnknown) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         scheduleInject(mock, 10, "\r\n+QSIMSTAT: 1,2\r\nOK\r\n");
 
-        EG915SimStatus st = ctx->modem().sim.getStatus();
-        EXPECT_EQ(st.enable, EG915SimStatus::ReportState::ENABLE);
-        EXPECT_EQ(st.inserted, EG915SimStatus::InsertStatus::UNKNOWN);
+        SIMStatusReport st = ctx->modem().sim().getStatus();
+        EXPECT_EQ(st.enable, SIMStatusReport::ReportState::ENABLE);
+        EXPECT_EQ(st.inserted, SIMStatusReport::InsertStatus::UNKNOWN);
 
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QSIMSTAT?\r\n"), std::string::npos);
@@ -217,18 +219,18 @@ TEST_F(SimQDSIMTest, QSIMSTATParsesUnknown) {
 TEST_F(SimQDSIMTest, SetStatusReportSendsEnableDisable) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
 
         // Enable
         scheduleInject(mock, 10, "\r\nOK\r\n");
-        EXPECT_TRUE(ctx->modem().sim.setStatusReport(true));
+        EXPECT_TRUE(ctx->modem().sim().setStatusReport(true));
         std::string tx1 = mock->GetTxData();
         EXPECT_NE(tx1.find("AT+QSIMSTAT=1\r\n"), std::string::npos);
 
         // Disable
         scheduleInject(mock, 20, "\r\nOK\r\n");
-        EXPECT_TRUE(ctx->modem().sim.setStatusReport(false));
+        EXPECT_TRUE(ctx->modem().sim().setStatusReport(false));
         std::string tx2 = mock->GetTxData();
         EXPECT_NE(tx2.find("AT+QSIMSTAT=0\r\n"), std::string::npos);
       },
@@ -239,13 +241,13 @@ TEST_F(SimQDSIMTest, SetStatusReportSendsEnableDisable) {
 TEST_F(SimQDSIMTest, QSIMSTATInvalidResponseDefaults) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, module));
         (void)mock->GetTxData();
         scheduleInject(mock, 10, "\r\n+QSIMSTAT: 9,9\r\nOK\r\n");
-        EG915SimStatus st = ctx->modem().sim.getStatus();
+        SIMStatusReport st = ctx->modem().sim().getStatus();
         // Defaults when parse fails
-        EXPECT_EQ(st.enable, EG915SimStatus::ReportState::DISABLE);
-        EXPECT_EQ(st.inserted, EG915SimStatus::InsertStatus::UNKNOWN);
+        EXPECT_EQ(st.enable, SIMStatusReport::ReportState::DISABLE);
+        EXPECT_EQ(st.inserted, SIMStatusReport::InsertStatus::UNKNOWN);
         std::string tx = mock->GetTxData();
         EXPECT_NE(tx.find("AT+QSIMSTAT?\r\n"), std::string::npos);
       },

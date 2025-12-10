@@ -1,5 +1,6 @@
 #include <AsyncGSM.h>
 #include <AsyncMqttGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -78,13 +79,14 @@ class MqttURCTest : public FreeRTOSTest {
   NiceMock<MockStream> *mock{nullptr};
   AsyncMqttGSM *mqtt{nullptr};
   GSMContext *ctx{};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
     mock = new NiceMock<MockStream>();
     mock->SetupDefaults();
     ctx = new GSMContext();
-    ASSERT_TRUE(ctx->begin(*mock));
+    ASSERT_TRUE(ctx->begin(*mock, module));
     gsm = new AsyncGSM(*ctx);
     mqtt = new AsyncMqttGSM(*ctx);
   }
@@ -136,7 +138,7 @@ TEST_F(MqttURCTest, QMTRECV_WithTopicPayload_QueuesAndCallback) {
         ASSERT_TRUE(mqtt->init());
 
         // Mark MQTT as connected so loop processes queue
-        gsm->context().modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
+        gsm->context().modem().mqtt().setState(MqttConnectionState::CONNECTED);
 
         // Capture callback
         std::atomic<bool> called{false};
@@ -172,11 +174,10 @@ TEST_F(MqttURCTest, QMTSTAT_SetsDisconnected) {
   bool ok = runInFreeRTOSTask(
       [this]() {
         // Initial state
-        gsm->context().modem().URCState.mqttState.store(MqttConnectionState::CONNECTED);
+        gsm->context().modem().mqtt().setState(MqttConnectionState::CONNECTED);
         InjectRx(mock, "\r\n+QMTSTAT: 1,2\r\n");
         vTaskDelay(pdMS_TO_TICKS(20));
-        EXPECT_EQ(
-            gsm->context().modem().URCState.mqttState.load(), MqttConnectionState::DISCONNECTED);
+        EXPECT_EQ(gsm->context().modem().mqtt().getState(), MqttConnectionState::DISCONNECTED);
       },
       "MQTT_QMTSTAT", 8192, 3, 3000);
   EXPECT_TRUE(ok);

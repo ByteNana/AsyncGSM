@@ -4,8 +4,6 @@
 #include <AsyncATHandler.h>
 #include <Client.h>
 #include <GSMContext/GSMContext.h>
-#include <modules/EG915/EG915.h>
-#include <utils/GSMTransport/GSMTransport.h>
 
 class AsyncGSM : public Client {
  private:
@@ -39,12 +37,4 @@ class AsyncGSM : public Client {
   bool owns = false;
   GSMContext *ctx;
   virtual bool isSecure() const { return false; }
-
-  virtual bool modemConnect(const char *host, uint16_t port);
-  virtual bool modemStop();
-  int8_t getRegistrationStatusXREG(const char *regCommand);
-  RegStatus getRegistrationStatus();
-
-  // Data parsing
-  bool parseQIRDResponse(const String &response);
 };

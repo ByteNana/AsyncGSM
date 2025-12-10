@@ -2,23 +2,23 @@
 
 #include <Arduino.h>
 #include <AsyncATHandler.h>
+#include <modules/iGSMModule/iSIMCard/iSIMCard.h>
 
-#include "SIMCard.settings.h"
-
-class EG915SIMCard {
+class EG915SIMCard : public iSIMCard {
  public:
   EG915SIMCard() = default;
   explicit EG915SIMCard(AsyncATHandler &handler);
 
   void init(AsyncATHandler &handler);
-  EG915SimDetConfig getDetection();
-  EG915SimStatus getStatus();
-  bool setStatusReport(bool enable);
+  SIMDetectionConfig getDetection() override;
+  SIMStatusReport getStatus() override;
+  bool setStatusReport(bool enable) override;
 
-  EG915SimSlot getCurrentSlot();
-  bool setSlot(EG915SimSlot slot);
+  SIMSlot getCurrentSlot() override;
+  bool setSlot(SIMSlot slot) override;
+  bool isReady() override;
 
  private:
-  AsyncATHandler *at{nullptr};
-  EG915SimSlot currentSlot{EG915SimSlot::UNKNOWN};
+  AsyncATHandler *at = nullptr;
+  SIMSlot currentSlot = SIMSlot::UNKNOWN;
 };

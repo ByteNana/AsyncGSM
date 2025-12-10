@@ -1,6 +1,7 @@
 #include <AsyncGSM.h>
 #include <AsyncMqttGSM.h>
 #include <AsyncSecureGSM.h>
+#include <modules/EG915/EG915.h>
 
 #include <atomic>
 #include <string>
@@ -60,13 +61,14 @@ TEST_F(GsmContextSharedTest, SharedContextByInstances) {
   bool ok = runInFreeRTOSTask(
       []() {
         GSMContext ctx;
+        AsyncEG915U module;
         AsyncGSM a(ctx);
         AsyncSecureGSM b(ctx);
         AsyncMqttGSM m(ctx);
 
         NiceMock<MockStream> mock;  // stack-allocated to avoid leaks on early failures
         mock.SetupDefaults();
-        ASSERT_TRUE(ctx.begin(mock));
+        ASSERT_TRUE(ctx.begin(mock, module));
 
         std::atomic<bool> done{false};
         // Use a single responder that handles TCP and OKs generic AT+ (incl. QMTCFG)
@@ -114,11 +116,12 @@ TEST_F(GsmContextSharedTest, SharedContextByPointerAndMix) {
   bool ok = runInFreeRTOSTask(
       []() {
         auto *ctx = new GSMContext();
+        auto *module = new AsyncEG915U();
         auto *a = new AsyncGSM(*ctx);  // pointer instance
 
         auto *mock = new NiceMock<MockStream>();
         mock->SetupDefaults();
-        ASSERT_TRUE(ctx->begin(*mock));
+        ASSERT_TRUE(ctx->begin(*mock, *module));
 
         std::atomic<bool> done{false};
         startTcpResponder(mock, &done, /*failOpen=*/false);
@@ -145,6 +148,7 @@ TEST_F(GsmContextSharedTest, SharedContextByPointerAndMix) {
         ctx->end();
         vTaskDelay(pdMS_TO_TICKS(80));
         delete a;
+        delete module;
         delete ctx;
         delete mock;
       },

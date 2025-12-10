@@ -6,7 +6,7 @@ EG915SIMCard::EG915SIMCard(AsyncATHandler &handler) { init(handler); }
 
 void EG915SIMCard::init(AsyncATHandler &handler) { at = &handler; }
 
-static bool parseQSIMDET(const String &resp, EG915SimDetConfig &out) {
+static bool parseQSIMDET(const String &resp, SIMDetectionConfig &out) {
   int pos = resp.indexOf("+QSIMDET:");
   if (pos < 0) return false;
   int lineEnd = resp.indexOf('\n', pos);
@@ -27,12 +27,12 @@ static bool parseQSIMDET(const String &resp, EG915SimDetConfig &out) {
   int li = l.toInt();
   if (ei < 0 || ei > 1) return false;
   if (li < 0 || li > 1) return false;
-  out.cardDetection = static_cast<EG915SimDetConfig::CardDetection>(ei);
-  out.insertLevel = static_cast<EG915SimDetConfig::InsertLevel>(li);
+  out.cardDetection = static_cast<SIMDetectionConfig::CardDetection>(ei);
+  out.insertLevel = static_cast<SIMDetectionConfig::InsertLevel>(li);
   return true;
 }
 
-static bool parseQDSIM(const String &resp, EG915SimSlot &slotOut) {
+static bool parseQDSIM(const String &resp, SIMSlot &slotOut) {
   int pos = resp.indexOf("+QDSIM:");
   if (pos < 0) return false;
   int lineEnd = resp.indexOf('\n', pos);
@@ -44,11 +44,11 @@ static bool parseQDSIM(const String &resp, EG915SimSlot &slotOut) {
   if (payload.length() == 0) return false;
   int val = payload.toInt();
   if (val != 0 && val != 1) return false;
-  slotOut = static_cast<EG915SimSlot>(val);
+  slotOut = static_cast<SIMSlot>(val);
   return true;
 }
 
-static bool parseQSIMSTAT(const String &resp, EG915SimStatus &out) {
+static bool parseQSIMSTAT(const String &resp, SIMStatusReport &out) {
   int pos = resp.indexOf("+QSIMSTAT:");
   if (pos < 0) return false;
   int lineEnd = resp.indexOf('\n', pos);
@@ -68,13 +68,13 @@ static bool parseQSIMSTAT(const String &resp, EG915SimStatus &out) {
   int ins = s.toInt();
   if (en < 0 || en > 1) return false;
   if (ins < 0 || ins > 2) return false;
-  out.enable = static_cast<EG915SimStatus::ReportState>(en);
-  out.inserted = static_cast<EG915SimStatus::InsertStatus>(ins);
+  out.enable = static_cast<SIMStatusReport::ReportState>(en);
+  out.inserted = static_cast<SIMStatusReport::InsertStatus>(ins);
   return true;
 }
 
-EG915SimDetConfig EG915SIMCard::getDetection() {
-  EG915SimDetConfig out{};
+SIMDetectionConfig EG915SIMCard::getDetection() {
+  SIMDetectionConfig out{};
   if (!at) return out;
   String resp;
   if (!at->sendSync("AT+QSIMDET?", resp)) return out;
@@ -82,8 +82,8 @@ EG915SimDetConfig EG915SIMCard::getDetection() {
   return out;
 }
 
-EG915SimStatus EG915SIMCard::getStatus() {
-  EG915SimStatus out{};
+SIMStatusReport EG915SIMCard::getStatus() {
+  SIMStatusReport out{};
   if (!at) return out;
   String resp;
   if (!at->sendSync("AT+QSIMSTAT?", resp)) return out;
@@ -97,7 +97,7 @@ bool EG915SIMCard::setStatusReport(bool enable) {
   return at->sendSync(cmd);
 }
 
-EG915SimSlot EG915SIMCard::getCurrentSlot() {
+SIMSlot EG915SIMCard::getCurrentSlot() {
   if (!at) return currentSlot;
   String resp;
   if (!at->sendSync("AT+QDSIM?", resp)) return currentSlot;
@@ -108,13 +108,20 @@ EG915SimSlot EG915SIMCard::getCurrentSlot() {
   return currentSlot;
 }
 
-bool EG915SIMCard::setSlot(EG915SimSlot slot) {
+bool EG915SIMCard::setSlot(SIMSlot slot) {
   if (!at) return false;
-  if (slot != EG915SimSlot::SLOT_1 && slot != EG915SimSlot::SLOT_2) return false;
+  if (slot != SIMSlot::SLOT_1 && slot != SIMSlot::SLOT_2) return false;
   if (slot == currentSlot) return true;
 
   String cmd = String("AT+QDSIM=") + String(u8(slot));
   bool ok = at->sendSync(cmd);
   if (ok) { currentSlot = slot; }
   return ok;
+}
+
+bool EG915SIMCard::isReady() {
+  if (!at) return false;
+  String resp;
+  if (!at->sendSync("AT+CPIN?", resp)) return false;
+  return resp.indexOf("READY") != -1;
 }

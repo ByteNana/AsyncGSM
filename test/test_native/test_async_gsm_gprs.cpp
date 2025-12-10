@@ -1,3 +1,5 @@
+#include <modules/EG915/EG915.h>
+
 #include <atomic>
 #include <string>
 
@@ -12,6 +14,7 @@ class AsyncGSMGprsTest : public FreeRTOSTest {
  protected:
   AsyncGSM *gsm{nullptr};
   NiceMock<MockStream> *mockStream{nullptr};
+  AsyncEG915U module;
 
   void SetUp() override {
     FreeRTOSTest::SetUp();
@@ -170,15 +173,15 @@ static void startNoSimResponder(NiceMock<MockStream> *s, std::atomic<bool> *done
 TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mockStream));
+        ASSERT_TRUE(gsm->context().begin(*mockStream, module));
 
         // Pretend we are already registered to skip wait loop
-        gsm->context().modem().URCState.creg.store(RegStatus::REG_OK_HOME);
+        gsm->context().modem().network().setRegistrationStatus(RegStatus::REG_OK_HOME);
 
         std::atomic<bool> done{false};
         startGprsResponder(mockStream, &done);
 
-        bool res = gsm->context().modem().gprsConnect("apn", "user", "pwd");
+        bool res = gsm->context().modem().network().gprsConnect("apn", "user", "pwd");
         done = true;
         vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);
@@ -190,14 +193,14 @@ TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNUserPwd) {
 TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNOnly) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mockStream));
+        ASSERT_TRUE(gsm->context().begin(*mockStream, module));
 
-        gsm->context().modem().URCState.creg.store(RegStatus::REG_OK_HOME);
+        gsm->context().modem().network().setRegistrationStatus(RegStatus::REG_OK_HOME);
 
         std::atomic<bool> done{false};
         startGprsResponder(mockStream, &done);
 
-        bool res = gsm->context().modem().gprsConnect("apn");
+        bool res = gsm->context().modem().network().gprsConnect("apn");
         done = true;
         vTaskDelay(pdMS_TO_TICKS(120));
         ASSERT_TRUE(res);
@@ -209,7 +212,7 @@ TEST_F(AsyncGSMGprsTest, GprsConnect_Succeeds_WithAPNOnly) {
 TEST_F(AsyncGSMGprsTest, SetupNetwork_ReturnsFalse_WhenSimNotReady) {
   bool ok = runInFreeRTOSTask(
       [this]() {
-        ASSERT_TRUE(gsm->context().begin(*mockStream));
+        ASSERT_TRUE(gsm->context().begin(*mockStream, module));
 
         std::atomic<bool> done{false};
         startNoSimResponder(mockStream, &done);

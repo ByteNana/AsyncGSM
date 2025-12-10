@@ -4,19 +4,25 @@
 
 GSMContext::GSMContext() { rxMutex = xSemaphoreCreateMutex(); }
 
-bool GSMContext::begin(Stream &stream, EG915SimSlot simSlot) {
+bool GSMContext::begin(Stream &stream, iGSMModule &module, SIMSlot simSlot) {
   this->simSlot = simSlot;
+  this->modemDriver = &module;
   ioStream = &stream;
   if (!atHandler.begin(stream)) {
     log_e("Failed to initialize AsyncATHandler");
     return false;
   }
   rxTransport.init(stream, rxMutex);
-  modemDriver.init(stream, atHandler, rxTransport);
+  modemDriver->init(stream, atHandler, rxTransport);
   return true;
 }
 
 bool GSMContext::setupNetwork(const char *apn) {
+  if (!modemDriver) {
+    log_e("Modem driver not initialized");
+    return false;
+  }
+
   bool canCommunicate = false;
   for (int i = 0; i < 4; i++) {
     if (atHandler.sendSync("AT", 2000)) {
@@ -29,18 +35,18 @@ bool GSMContext::setupNetwork(const char *apn) {
     return false;
   }
 
-  if (!modemDriver.setEchoOff()) return false;
-  if (!modemDriver.enableVerboseErrors()) return false;
-  if (!modemDriver.checkModemModel()) return false;
-  if (!modemDriver.checkTimezone()) return false;
-  if (!modemDriver.setSIMSlot(simSlot)) return false;
+  if (!modemDriver->setEchoOff()) return false;
+  if (!modemDriver->enableVerboseErrors()) return false;
+  if (!modemDriver->checkModemModel()) return false;
+  if (!modemDriver->checkTimezone()) return false;
+  if (!modemDriver->sim().setSlot(simSlot)) return false;
 
   bool simReady = false;
   uint8_t retries = 0;
   do {
     log_w("Waiting for SIM card...");
     delay(1000);
-    simReady = modemDriver.checkSIMReady();
+    simReady = modemDriver->checkSIMReady();
     retries++;
   } while (!simReady && retries < 10);
 
@@ -51,13 +57,13 @@ bool GSMContext::setupNetwork(const char *apn) {
 
   log_d("SIM card is ready.");
 
-  modemDriver.disableConnections();
-  modemDriver.disalbeSleepMode();
+  modemDriver->disableConnections();
+  modemDriver->disalbeSleepMode();
 
-  if (!modemDriver.gprsConnect(apn)) return false;
+  if (!modemDriver->network().gprsConnect(apn)) return false;
 
   for (int i = 0; i < 10; ++i) {
-    if (modemDriver.isGPRSSAttached() && modemDriver.checkNetworkContext()) {
+    if (modemDriver->network().isGPRSSAttached() && modemDriver->network().checkContext()) {
       log_d("GPRS is attached.");
       return true;
     }
