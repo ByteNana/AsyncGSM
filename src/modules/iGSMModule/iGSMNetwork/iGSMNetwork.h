@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include <atomic>
+
 #include "iGSMNetwork.types.h"
 
 class iGSMNetwork {
@@ -21,5 +23,5 @@ class iGSMNetwork {
   virtual void setRegistrationStatus(RegStatus status) = 0;
 
  protected:
-  std::atomic<RegStatus> creg = RegStatus::REG_NO_RESULT;
+  std::atomic<RegStatus> creg{RegStatus::REG_NO_RESULT};
 };

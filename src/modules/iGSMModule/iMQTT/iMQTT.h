@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include <atomic>
+
 #include "MqttQueue/MqttQueue.h"
 #include "iMQTT.types.h"
 
@@ -29,6 +31,6 @@ class iMQTT {
 
  protected:
   const char *cidx = "1";
-  std::atomic<MqttConnectionState> mqttState = MqttConnectionState::IDLE;
+  std::atomic<MqttConnectionState> mqttState{MqttConnectionState::IDLE};
   AtomicMqttQueue *mqttQueueSub = nullptr;
 };

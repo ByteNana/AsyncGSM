@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <utils/GSMTransport/GSMTransport.h>
 
+#include <atomic>
+
 #include "iSocket.types.h"
 
 class iSocketConnection {
@@ -33,5 +35,5 @@ class iSocketConnection {
  protected:
   bool certConfigured = false;
   GSMTransport *transport = nullptr;
-  std::atomic<ConnectionStatus> isConnected = ConnectionStatus::DISCONNECTED;
+  std::atomic<ConnectionStatus> isConnected{ConnectionStatus::DISCONNECTED};
 };
